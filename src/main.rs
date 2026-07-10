@@ -7,7 +7,7 @@ use crate::features::pipeline::pipeline_builder::PipelineBuilder;
 use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracker::tracker_factory::TrackerChoice;
 use crate::features::tracking_suscribers::adapters::logger_subscriber::LoggerSubscriber;
-
+use crate::features::tracking_suscribers::tracking_subscriber_factory::TrackerSubscriberChoice;
 
 pub mod features;
 pub mod core;
@@ -44,7 +44,7 @@ fn main() -> Result<(), AforaError> {
            delta_t: 3,
            inertia: 0.2
         })?
-        .add_subscriber(Box::new(LoggerSubscriber::new()))
+        .add_subscriber(TrackerSubscriberChoice::Logger)
         .build()?;
 
     if let Err(err) =pipeline.run() {

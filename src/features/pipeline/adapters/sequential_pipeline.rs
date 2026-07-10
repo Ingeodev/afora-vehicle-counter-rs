@@ -10,13 +10,14 @@ use crate::features::tracker::domain::tracking_input::TrackingInput;
 use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracking_suscribers::domain::tracking_subscriber_input::TrackingSubscriberInput;
 use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSubscriber;
+use crate::features::tracking_suscribers::tracking_subscriber_factory::{TrackerSubscriberChoice, TrackerSubscriberFactory};
 
 pub struct SequentialPipeline {
     media_source: Box<dyn FrameSource>,
     detector: Detector,
     tracker: Box<dyn Tracker>,
     subscriber_senders: Vec<Sender<Arc<TrackingSubscriberInput>>>,
-    subscriber_threads: Vec<JoinHandle<()>>,
+    subscriber_threads: Vec<JoinHandle<Result<(), AforaError>>>,
 }
 
 impl SequentialPipeline {
@@ -24,23 +25,27 @@ impl SequentialPipeline {
         media_source: Box<dyn FrameSource>,
         detector: Detector,
         tracker: Box<dyn Tracker>,
-        subscribers: Vec<Box<dyn TrackingSubscriber>>,
+        subscribers: Vec<TrackerSubscriberChoice>,
     ) -> Self {
 
         let mut subscriber_senders = Vec::new();
         let mut subscriber_threads = Vec::new();
 
-        for mut subscriber in subscribers {
+        for mut subscriber_choice in subscribers {
 
             let (tx, rx) = flume::unbounded();
             subscriber_senders.push(tx);
 
-            let handle = std::thread::spawn(move || {
+
+            let handle = std::thread::spawn(move || -> Result<(), AforaError> {
+
+                let mut subscriber = TrackerSubscriberFactory::build(subscriber_choice)?;
+                
                 while let Ok(frame) = rx.recv() {
-                    if let Err(err) = subscriber.on_tracking_frame(frame) {
-                        eprintln!("Tracking subscriber failed: {:?}", err);
-                    }
+                    subscriber.on_tracking_frame(frame)?
                 }
+                
+                Ok(())
             });
             subscriber_threads.push(handle);
         }

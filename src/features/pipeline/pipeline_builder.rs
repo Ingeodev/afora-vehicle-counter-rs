@@ -8,6 +8,7 @@ use crate::features::pipeline::ports::pipeline::Pipeline;
 use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracker::tracker_factory::{TrackerChoice, TrackerFactory};
 use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSubscriber;
+use crate::features::tracking_suscribers::tracking_subscriber_factory::TrackerSubscriberChoice;
 
 pub struct PipelineBuilder {
     pub execution_mode: Option<ExecutionMode>,
@@ -15,7 +16,7 @@ pub struct PipelineBuilder {
     pub runtime: Option<RuntimeChoice>,
     pub model: Option<ModelChoice>,
     pub tracker_config: Option<Box<dyn Tracker>>,
-    pub subscribers: Vec<Box<dyn TrackingSubscriber>>,
+    pub subscribers: Vec<TrackerSubscriberChoice>,
 }
 
 impl PipelineBuilder {
@@ -57,7 +58,7 @@ impl PipelineBuilder {
         Ok(self)
     }
 
-    pub fn add_subscriber (&mut self, subscriber_choice: Box<dyn TrackingSubscriber>) -> &mut Self {
+    pub fn add_subscriber (&mut self, subscriber_choice: TrackerSubscriberChoice) -> &mut Self {
         self.subscribers.push(subscriber_choice);
         self
     }

@@ -4,12 +4,13 @@ use crate::features::media_source::domain::frame_source::FrameSource;
 use crate::features::pipeline::ports::pipeline::Pipeline;
 use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSubscriber;
+use crate::features::tracking_suscribers::tracking_subscriber_factory::TrackerSubscriberChoice;
 
 pub struct MultithreadedPipeline {
     media_source: Box<dyn FrameSource>,
     detector: Detector,
     tracker: Box<dyn Tracker>,
-    subscribers: Vec<Box<dyn TrackingSubscriber>>
+    subscribers: Vec<TrackerSubscriberChoice>
 }
 
 impl MultithreadedPipeline {
@@ -17,7 +18,7 @@ impl MultithreadedPipeline {
         media_source: Box<dyn FrameSource>, 
         detector: Detector, 
         tracker: Box<dyn Tracker>,
-        subscribers: Vec<Box<dyn TrackingSubscriber>>
+        subscribers: Vec<TrackerSubscriberChoice>
     ) -> Self {
         Self {
             media_source,
