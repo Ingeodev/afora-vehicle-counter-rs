@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::string::String;
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
@@ -21,7 +22,7 @@ impl OnnxRuntime {
     /// Carga el modelo ONNX y captura el spec real de entrada/salida directamente
     /// del grafo (no asumido), para que `Detector::new` pueda validar shapes
     /// contra lo que el `ModelPipeline` espera.
-    pub fn load(model_path: &str, num_threads: usize) -> Result<Self, AforaError> {
+    pub fn load(model_path: PathBuf, num_threads: usize) -> Result<Self, AforaError> {
         let session = Session::builder()
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
             .with_optimization_level(GraphOptimizationLevel::Level3)

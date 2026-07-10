@@ -26,6 +26,7 @@ pub enum AforaError {
     
     MediaError(String),
     InvalidArgument(String),
+    ConfigurationError(String)
 }
 
 
@@ -51,6 +52,7 @@ impl fmt::Display for AforaError {
             }
             AforaError::MediaError(msg) => write!(f, "Error al cargar la el recurso multimedia {msg}"),
             AforaError::InvalidArgument(msg) => write!(f, "{msg}"),
+            AforaError::ConfigurationError(msg) => write!(f, "Error al definir el flujo de procesamiento: {msg}"),
         }
     }
 }

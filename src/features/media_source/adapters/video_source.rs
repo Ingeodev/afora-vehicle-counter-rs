@@ -18,11 +18,13 @@ pub struct VideoSource {
     frame_queue: VecDeque<Frame>,
     eof_sent: bool,
     finished: bool,
+    frame_limit: Option<i32>, // Por defecto sin límite
+    frames_yielded: i32, // Inicia en 0
 }
 
 impl VideoSource {
-    pub fn new(path: impl Into<PathBuf>) -> Result<Self, AforaError> {
-        let path = path.into();
+    pub fn new(path: PathBuf) -> Result<Self, AforaError> {
+        //let path = path.into();
 
         ffmpeg::init().map_err(|e| AforaError::MediaError(e.to_string()))?;
 
@@ -62,7 +64,14 @@ impl VideoSource {
             frame_queue: VecDeque::new(),
             eof_sent: false,
             finished: false,
+            frames_yielded: 0,
+            frame_limit: None
         })
+    }
+    
+    pub fn with_max_frame_limit(mut self, limit: i32) -> Self {
+        self.frame_limit = Some(limit);
+        self
     }
 
     /// Drena todos los frames disponibles del decoder tras un send_packet/send_eof
@@ -124,7 +133,16 @@ impl Iterator for VideoSource {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+
+            if let Some(limit) = self.frame_limit {
+                if self.frames_yielded >= limit {
+                    self.finished = true;
+                    return None;
+                }
+            }
+
             if let Some(frame) = self.frame_queue.pop_front() {
+                self.frames_yielded += 1;
                 return Some(Ok(frame));
             }
 
@@ -136,7 +154,7 @@ impl Iterator for VideoSource {
             // Esto es seguro porque el estado de lectura vive en el AVFormatContext
             // subyacente, no en el wrapper Rust — es el patrón estándar para
             // evitar el problema de "iterador auto-referencial" contra &mut self.
-            match self.ictx.packets().next() {
+            match self.ictx.packets().next().take() {
                 Some((stream, packet)) => {
                     if stream.index() == self.video_stream_index {
                         if let Err(e) = self.decoder.send_packet(&packet) {

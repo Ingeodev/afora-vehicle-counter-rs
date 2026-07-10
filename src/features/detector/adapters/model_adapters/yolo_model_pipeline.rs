@@ -4,6 +4,7 @@
 // MODEL PIPELINE ADAPTER — YOLOv8 / YOLO11 (formato de salida Ultralytics)
 // =============================================================================
 
+use std::sync::Arc;
 use image::imageops::FilterType;
 use image::{Rgb, RgbImage};
 use crate::core::afora_error::AforaError;
@@ -38,7 +39,7 @@ impl YoloOnnxPipeline {
         }
     }
     fn create_rgb_image(
-        frame: &Frame,
+        frame: Arc<Frame>,
     ) -> Result<RgbImage, AforaError> {
 
         RgbImage::from_raw(
@@ -139,7 +140,7 @@ impl YoloOnnxPipeline {
 impl ModelPipeline for YoloOnnxPipeline {
     fn preprocess(
         &self,
-        frame: &Frame,
+        frame: Arc<Frame>,
         target_spec: &TensorSpec,
     ) -> Result<TensorInput, AforaError> {
 

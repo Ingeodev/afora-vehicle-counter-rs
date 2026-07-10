@@ -3,6 +3,8 @@ pub mod domain;
 pub mod adapters;
 pub mod application;
 
+use std::path::PathBuf;
+use std::sync::Arc;
 use crate::core::afora_error::AforaError;
 use crate::features::detector::adapters::model_adapters::yolo_model_pipeline::YoloOnnxPipeline;
 use crate::features::detector::adapters::runtime_adapters::onnx_runtime::OnnxRuntime;
@@ -50,8 +52,8 @@ impl Detector {
     }
 
     /// Ejecuta el pipeline completo: preprocess -> run -> postprocess.
-    pub fn detect(&mut self, frame: &Frame) -> Result<Vec<Detection>, AforaError> {
-        let input = self.pipeline.preprocess(frame, self.runtime.input_spec())?;
+    pub fn detect(&mut self, frame: Arc<Frame>) -> Result<Vec<Detection>, AforaError> {
+        let input = self.pipeline.preprocess(frame.clone(), self.runtime.input_spec())?;
         let output = self.runtime.run(&input)?;
         self.pipeline.postprocess(output, frame.original_size())
     }
@@ -78,7 +80,7 @@ impl Detector {
 /// mínimos necesarios para cargar ese backend específico.
 pub enum RuntimeChoice {
     Onnx {
-        model_path: String,
+        model_path: PathBuf,
         num_threads: usize,
     },
     #[cfg(feature = "rknn")]
@@ -114,7 +116,7 @@ impl DetectorFactory {
         match choice {
             RuntimeChoice::Onnx { model_path, num_threads } => {
                 // Reemplazar por: OnnxRuntime::load(&model_path, num_threads)
-                Ok(Box::new(OnnxRuntime::load(&model_path, num_threads)?))
+                Ok(Box::new(OnnxRuntime::load(model_path, num_threads)?))
             }
             #[cfg(feature = "rknn")]
             RuntimeChoice::Rknn { model_path } => {
@@ -176,7 +178,7 @@ mod tests {
     }
 
     impl ModelPipeline for FakePipeline {
-        fn preprocess(&self, _frame: &Frame, _target_spec: &TensorSpec) -> Result<TensorInput, AforaError> {
+        fn preprocess(&self, _frame: Arc<Frame>, _target_spec: &TensorSpec) -> Result<TensorInput, AforaError> {
             Ok(TensorInput::new(vec![], self.expected_shape_as_spec()))
         }
         fn postprocess(&self, _output: TensorOutput, _original_size: (u32, u32)) -> Result<Vec<Detection>, AforaError> {

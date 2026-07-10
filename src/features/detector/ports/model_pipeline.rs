@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::core::afora_error::AforaError;
 use crate::features::detector::domain::detection::Detection;
 use crate::features::detector::ports::tensor_base::TensorSpec;
@@ -13,7 +14,7 @@ pub trait ModelPipeline: Send + Sync {
     /// Recibe el TensorSpec real del runtime destino para producir los bytes
     /// en el dtype/layout correctos (f32/NCHW para ONNX, u8/NHWC para RKNN, etc.)
     /// sin necesitar un `match` sobre qué runtime es.
-    fn preprocess(&self, frame: &Frame, target_spec: &TensorSpec) -> Result<TensorInput, AforaError>;
+    fn preprocess(&self, frame: Arc<Frame>, target_spec: &TensorSpec) -> Result<TensorInput, AforaError>;
 
     /// Decodifica la salida cruda del runtime a detecciones en coordenadas
     /// de la imagen original (deshace resize/letterbox aplicado en preprocess).

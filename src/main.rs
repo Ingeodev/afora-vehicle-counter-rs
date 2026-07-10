@@ -1,130 +1,72 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 use crate::core::afora_error::AforaError;
-use crate::features::detector::{DetectorFactory, ModelChoice, RuntimeChoice};
-use crate::features::media_source::adapters::image_source::ImageSource;
-use crate::features::media_source::adapters::video_source::VideoSource;
-use crate::features::tracker::adapters::oc_sort_tracker::OcSortTracker;
-use crate::features::tracker::domain::tracking_input::TrackingInput;
+use crate::features::detector::{ ModelChoice, RuntimeChoice};
+use crate::features::media_source::media_source_factory::MediaSourceChoice;
+use crate::features::pipeline::domain::pipeline_config::ExecutionMode;
+use crate::features::pipeline::pipeline_builder::PipelineBuilder;
 use crate::features::tracker::ports::tracker::Tracker;
-use crate::features::writter::adapters::image_writter::ImageWriter;
-use crate::features::writter::adapters::video_writter::VideoWriter;
+use crate::features::tracker::tracker_factory::TrackerChoice;
+use crate::features::tracking_suscribers::adapters::logger_subscriber::LoggerSubscriber;
+
 
 pub mod features;
 pub mod core;
 mod shared;
 
-fn run_image(args: &CliArgs) -> Result<(), AforaError> {
-    let mut detector = DetectorFactory::build(
-        RuntimeChoice::Onnx {
-            model_path: args.model_path.clone(),
-            num_threads: 4,
-        },
-        ModelChoice::YoloOnnx {
-            conf_threshold: 0.25,
-        },
-    )?;
-    let mut tracker = OcSortTracker::new(30, 1, 0.3, 3, 0.2);
-
-    let source = ImageSource::new(args.image_path.clone());
-    let writer = ImageWriter::new()?;
-
-    for frame in source {
-        let frame = Arc::new(frame?);
-        let detections = detector.detect(&frame)?;
-        let tracks = tracker.update(TrackingInput {
-            frame: frame.clone(),
-            detections,
-        })?;
-
-        println!("Detected {} objects", tracks.len());
-        writer.write(&frame, &tracks, "assets/images/output.png")?;
-
-        for track in &tracks {
-            println!("{:#?}", track);
-        }
-    }
-
-    Ok(())
-}
-
-fn run_video(args: &CliArgs) -> Result<(), AforaError> {
-    let mut detector = DetectorFactory::build(
-        RuntimeChoice::Onnx {
-            model_path: args.model_path.clone(),
-            num_threads: 4,
-        },
-        ModelChoice::YoloOnnx {
-            conf_threshold: 0.25,
-        },
-    )?;
-    let mut tracker = OcSortTracker::new(30, 1, 0.3, 3, 0.2);
-
-    let source = VideoSource::new(args.image_path.clone())?;
-
-    // El writer necesita conocer width/height/fps ANTES del primer frame,
-    // por eso los leemos del source recién construido (aún no consumido).
-    let mut writer = VideoWriter::new(
-        "assets/videos/output.mp4",
-        source.width(),
-        source.height(),
-        source.fps(),
-        23, // crf
-    )?;
-
-    for frame in source {
-        let frame = Arc::new(frame?);
-        let detections = detector.detect(&frame)?;
-        let tracks = tracker.update(TrackingInput {
-            frame: frame.clone(),
-            detections,
-        })?;
-
-        println!("Detected {} objects", tracks.len());
-        writer.write(&frame, &tracks)?;
-
-        for track in &tracks {
-            println!("{:#?}", track);
-        }
-    }
-
-    // Imprescindible: hace flush del encoder y escribe el trailer del mp4.
-    writer.finish()?;
-
-    Ok(())
-}
-
 fn main() -> Result<(), AforaError> {
-    let args = CliArgs::parse()?;
+    //let args = CliArgs::parse()?;
 
-    // Asumo dispatch por extensión del archivo de entrada ya que tu CliArgs
-    // actual no trae un flag explícito de modo. Si prefieres un flag
-    // explícito (--mode image|video) en vez de inferirlo, lo ajustamos.
-    let is_video = args
-        .image_path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| matches!(ext.to_lowercase().as_str(), "mp4" | "mkv" | "avi" | "mov"))
-        .unwrap_or(false);
+    let args = CliArgs {
+        source: PathBuf::from("assets/videos/video.mp4"),
+        model_path: PathBuf::from("assets/models/yolo11s.onnx"),
+        max_frames: Some(2)
+    };
 
-    if is_video {
-        run_video(&args)
-    } else {
-        run_image(&args)
+    let mut pipeline_builder = PipelineBuilder::new();
+
+    let mut pipeline =pipeline_builder
+        .set_execution_mode(ExecutionMode::Sequential)
+        .set_media_source(MediaSourceChoice::Video {
+            path: args.source.clone(),
+            max_frames: args.max_frames,
+        })?
+        .set_model(ModelChoice::YoloOnnx {
+            conf_threshold: 0.25,
+        })
+        .set_runtime(RuntimeChoice::Onnx {
+            model_path: args.model_path.clone(),
+            num_threads: 4,
+        })
+        .set_tracker_config(TrackerChoice::OcSort {
+           max_age: 30,
+           min_hits: 1,
+           iou_threshold: 0.3,
+           delta_t: 3,
+           inertia: 0.2
+        })?
+        .add_subscriber(Box::new(LoggerSubscriber::new()))
+        .build()?;
+
+    if let Err(err) =pipeline.run() {
+        println!("Error: {}", err);
     }
+
+    Ok(())
 }
 
 
 struct CliArgs {
-    pub image_path: PathBuf,
-    pub model_path: String,
+    pub source: PathBuf,
+    pub model_path: PathBuf,
+    pub max_frames: Option<i32>
 }
 
 impl CliArgs {
     fn parse() -> Result<Self, AforaError> {
 
-        let mut image = None;
+        let mut source = None;
         let mut model = None;
+        let mut max_frames: Option<i32> = None;
 
         let mut args = std::env::args().skip(1);
 
@@ -132,12 +74,18 @@ impl CliArgs {
 
             match arg.as_str() {
 
-                "--image" => {
-                    image = args.next();
+                "--source" => {
+                    source = args.next();
                 }
 
                 "--model" => {
                     model = args.next();
+                }
+
+                "--max_frames" => {
+                    max_frames = args
+                        .next()
+                        .and_then(|s| s.parse().ok());
                 }
 
                 _ => {}
@@ -145,7 +93,7 @@ impl CliArgs {
         }
 
         Ok(Self {
-            image_path: image.ok_or_else(|| {
+            source: source.ok_or_else(|| {
                 AforaError::InvalidArgument(
                     "missing --image".into()
                 )
@@ -155,7 +103,9 @@ impl CliArgs {
                 AforaError::InvalidArgument(
                     "missing --model".into()
                 )
-            })?,
+            })?.parse().unwrap(),
+
+            max_frames,
         })
     }
 }
