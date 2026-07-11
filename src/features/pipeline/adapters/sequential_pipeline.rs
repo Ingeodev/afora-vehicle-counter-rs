@@ -109,8 +109,33 @@ impl Pipeline for SequentialPipeline {
         
         self.notify_event(event_end);
 
-        Ok(())
+        shutdown_subscribers(&mut self.subscriber_senders, &mut self.subscriber_threads)
+    }
+}
+
+impl Drop for SequentialPipeline {
+    fn drop(&mut self) {
+        let _ = shutdown_subscribers(&mut self.subscriber_senders, &mut self.subscriber_threads);
+    }
+}
+
+fn shutdown_subscribers(
+    senders: &mut Vec<Sender<Arc<TrackingSubscriberInput>>>,
+    handles: &mut Vec<JoinHandle<Result<(), AforaError>>>,
+) -> Result<(), AforaError> {
+    senders.clear();
+
+    for handle in handles.drain(..) {
+        match handle.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Err(e),
+            Err(_) => {
+                return Err(AforaError::PostprocessError(
+                    "Subscriber thread panicked".into(),
+                ))
+            }
+        }
     }
 
-
+    Ok(())
 }
