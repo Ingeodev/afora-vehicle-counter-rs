@@ -1,0 +1,1 @@
+1. Investigar la manera de confirmar la finalizacion del flujo de track en trtack subscriber para poder finalizar la escritura del video en video_writer

@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use flume::Sender;
+use flume::{unbounded, Sender};
 use crate::core::afora_error::AforaError;
 use crate::features::detector::Detector;
 use crate::features::media_source::domain::frame_source::FrameSource;
 use crate::features::pipeline::ports::pipeline::Pipeline;
 use crate::features::tracker::domain::tracking_input::TrackingInput;
 use crate::features::tracker::ports::tracker::Tracker;
-use crate::features::tracking_suscribers::domain::tracking_subscriber_input::TrackingSubscriberInput;
+use crate::features::tracking_suscribers::domain::tracking_subscriber_input::{FrameTrackingProps, TrackingSubscriberInput};
 use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSubscriber;
 use crate::features::tracking_suscribers::tracking_subscriber_factory::{TrackerSubscriberChoice, TrackerSubscriberFactory};
 
@@ -33,7 +33,7 @@ impl SequentialPipeline {
 
         for mut subscriber_choice in subscribers {
 
-            let (tx, rx) = flume::unbounded();
+            let (tx, rx) = unbounded();
             subscriber_senders.push(tx);
 
 
@@ -42,7 +42,7 @@ impl SequentialPipeline {
                 let mut subscriber = TrackerSubscriberFactory::build(subscriber_choice)?;
                 
                 while let Ok(frame) = rx.recv() {
-                    subscriber.on_tracking_frame(frame)?
+                    subscriber.notify_event(frame)?
                 }
                 
                 Ok(())
@@ -59,16 +59,23 @@ impl SequentialPipeline {
         }
     }
 
-    fn notify_new_track(&mut self, input: Arc<TrackingSubscriberInput>) {
+    fn notify_event(&mut self, input: Arc<TrackingSubscriberInput>) {
         for sender in &self.subscriber_senders {
             let _ = sender.send(input.clone());
         }
     }
+    
 }
 
 impl Pipeline for SequentialPipeline {
     fn run(&mut self) -> Result<(), AforaError> {
-
+        
+        let event_start = Arc::new(TrackingSubscriberInput::StartTracking);
+        let event_end = Arc::new(TrackingSubscriberInput::EndOfTracking);
+        
+        self.notify_event(event_start);
+        
+        
         while let Some(frame) = self.media_source.next() {
             let frame = Arc::new(frame?);
 
@@ -79,6 +86,7 @@ impl Pipeline for SequentialPipeline {
                 detections,
             })?;
 
+            //TODO: Cambiar esto por los datos reales desde la construccion del frame
             let time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|_| {
@@ -87,15 +95,19 @@ impl Pipeline for SequentialPipeline {
                     )
                 })?;
 
-            let subscriber_input = Arc::new(TrackingSubscriberInput {
+            let subscriber_input = Arc::new(FrameTrackingProps {
                 frame_id: time.as_secs(),
                 timestamp: time,
                 frame,
                 tracks,
             });
+            
+            let event = Arc::new(TrackingSubscriberInput::FrameWithTracking(subscriber_input));
 
-            self.notify_new_track(subscriber_input);
+            self.notify_event(event);
         }
+        
+        self.notify_event(event_end);
 
         Ok(())
     }
