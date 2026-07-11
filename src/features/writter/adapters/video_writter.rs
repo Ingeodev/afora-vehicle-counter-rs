@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ab_glyph::FontArc;
 use ffmpeg_next as ffmpeg;
@@ -32,8 +32,8 @@ pub struct VideoWriter {
 impl VideoWriter {
     /// `fps` se usa como time_base del stream (1/fps) y como frame_rate del encoder.
     /// `crf` controla calidad (menor = mejor calidad/más peso, 18-28 es rango típico).
-    pub fn new<P: AsRef<std::path::Path>>(
-        output_path: P,
+    pub fn new(
+        output_path: PathBuf,
         width: u32,
         height: u32,
         fps: u32,
@@ -153,7 +153,7 @@ impl VideoWriter {
 
     /// Hay que llamarlo al terminar de escribir todos los frames: hace flush
     /// del encoder y escribe el trailer del mp4. Sin esto el archivo queda corrupto.
-    pub fn finish(mut self) -> Result<(), AforaError> {
+    pub fn finish(&mut self) -> Result<(), AforaError> {
         self.encoder
             .send_eof()
             .map_err(|e| AforaError::MediaError(e.to_string()))?;

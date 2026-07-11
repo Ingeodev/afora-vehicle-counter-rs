@@ -8,6 +8,7 @@ use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracker::tracker_factory::TrackerChoice;
 use crate::features::tracking_suscribers::adapters::logger_subscriber::LoggerSubscriber;
 use crate::features::tracking_suscribers::tracking_subscriber_factory::TrackerSubscriberChoice;
+use crate::shared::utilities::get_video_props::get_video_properties;
 
 pub mod features;
 pub mod core;
@@ -19,10 +20,15 @@ fn main() -> Result<(), AforaError> {
     let args = CliArgs {
         source: PathBuf::from("assets/videos/video.mp4"),
         model_path: PathBuf::from("assets/models/yolo11s.onnx"),
-        max_frames: Some(2)
+        max_frames: Some(150)
     };
 
     let mut pipeline_builder = PipelineBuilder::new();
+
+    let video_props = get_video_properties(args.source.clone())
+        .map_err(|e| {
+            AforaError::MediaError(String::from("El video parece encontrarse corrupto"))
+        })?;
 
     let mut pipeline =pipeline_builder
         .set_execution_mode(ExecutionMode::Sequential)
@@ -45,6 +51,13 @@ fn main() -> Result<(), AforaError> {
            inertia: 0.2
         })?
         .add_subscriber(TrackerSubscriberChoice::Logger)
+        .add_subscriber(TrackerSubscriberChoice::VideoWriter {
+            output_path: PathBuf::from("assets/videos/output.mp4"),
+            width: video_props.width,
+            height: video_props.height,
+            fps: video_props.fps,
+            crf: 23,
+        })
         .build()?;
 
     if let Err(err) =pipeline.run() {
