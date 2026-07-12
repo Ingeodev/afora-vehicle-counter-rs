@@ -32,10 +32,10 @@ pub fn draw_overlays(image: &mut RgbImage, tracks: &[TrackingOutput], font: &Fon
     }
 }
 
+const FONT_DATA: &[u8] =
+    include_bytes!("../../../assets/fonts/Roboto/Roboto-VariableFont_wdth,wght.ttf");
+
 pub fn load_default_font() -> Result<FontArc, crate::core::afora_error::AforaError> {
-    FontArc::try_from_vec(
-        std::fs::read("assets/fonts/Roboto/Roboto-VariableFont_wdth,wght.ttf")
-            .map_err(|e| crate::core::afora_error::AforaError::PostprocessError(e.to_string()))?,
-    )
+    FontArc::try_from_vec(FONT_DATA.to_vec())
         .map_err(|e| crate::core::afora_error::AforaError::PostprocessError(e.to_string()))
 }

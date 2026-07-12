@@ -15,13 +15,16 @@ pub mod core;
 mod shared;
 
 fn main() -> Result<(), AforaError> {
-    //let args = CliArgs::parse()?;
+    
 
     let args = CliArgs {
         source: PathBuf::from("assets/videos/video.mp4"),
         model_path: PathBuf::from("assets/models/yolo11s.onnx"),
-        max_frames: Some(15)
+        max_frames: Some(15),
+        video_output_path: PathBuf::from("assets/videos/output2.mp4"),
     };
+
+    let args = CliArgs::parse()?;
 
     let mut pipeline_builder = PipelineBuilder::new();
 
@@ -52,7 +55,7 @@ fn main() -> Result<(), AforaError> {
         })?
         .add_subscriber(TrackerSubscriberChoice::Logger)
         .add_subscriber(TrackerSubscriberChoice::VideoWriter {
-            output_path: PathBuf::from("assets/videos/output.mp4"),
+            output_path: args.video_output_path,
             width: video_props.width,
             height: video_props.height,
             fps: video_props.fps,
@@ -71,7 +74,8 @@ fn main() -> Result<(), AforaError> {
 struct CliArgs {
     pub source: PathBuf,
     pub model_path: PathBuf,
-    pub max_frames: Option<i32>
+    pub max_frames: Option<i32>,
+    pub video_output_path: PathBuf,
 }
 
 impl CliArgs {
@@ -79,6 +83,7 @@ impl CliArgs {
 
         let mut source = None;
         let mut model = None;
+        let mut video_output_path = None;
         let mut max_frames: Option<i32> = None;
 
         let mut args = std::env::args().skip(1);
@@ -101,6 +106,10 @@ impl CliArgs {
                         .and_then(|s| s.parse().ok());
                 }
 
+                "--video_output_path" => {
+                    video_output_path = args.next();
+                }
+
                 _ => {}
             }
         }
@@ -113,6 +122,12 @@ impl CliArgs {
             })?.parse().unwrap(),
 
             model_path: model.ok_or_else(|| {
+                AforaError::InvalidArgument(
+                    "missing --model".into()
+                )
+            })?.parse().unwrap(),
+
+            video_output_path: video_output_path.ok_or_else(|| {
                 AforaError::InvalidArgument(
                     "missing --model".into()
                 )

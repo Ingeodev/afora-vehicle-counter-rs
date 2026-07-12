@@ -37,7 +37,7 @@ impl TrackingSubscriber for VideoWriterSubscriber {
     }
 
     fn on_tracking_frame(&mut self, tracks: Arc<FrameTrackingProps>) -> Result<(), AforaError> {
-        println!("New frame to export video");
+        //println!("New frame to export video");
         
         self.video_writer.write( &tracks.frame, &tracks.tracks )?;
         Ok(())
