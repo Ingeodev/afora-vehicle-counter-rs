@@ -11,7 +11,6 @@ use crate::features::detector::adapters::runtime_adapters::onnx_runtime::OnnxRun
 use crate::features::detector::domain::detection::Detection;
 use crate::features::detector::ports::inference_runtime::InferenceRuntime;
 use crate::features::detector::ports::model_pipeline::ModelPipeline;
-use crate::features::detector::RuntimeChoice::Onnx;
 use crate::shared::domain::frame::Frame;
 use self::ports::tensor_base::*;
 
@@ -82,11 +81,7 @@ pub enum RuntimeChoice {
     Onnx {
         model_path: PathBuf,
         num_threads: usize,
-    },
-    #[cfg(feature = "rknn")]
-    Rknn {
-        model_path: String,
-    },
+    }
 }
 
 /// Selección de arquitectura de modelo a construir.
@@ -117,12 +112,6 @@ impl DetectorFactory {
             RuntimeChoice::Onnx { model_path, num_threads } => {
                 // Reemplazar por: OnnxRuntime::load(&model_path, num_threads)
                 Ok(Box::new(OnnxRuntime::load(model_path, num_threads)?))
-            }
-            #[cfg(feature = "rknn")]
-            RuntimeChoice::Rknn { model_path } => {
-                // Reemplazar por: RknnRuntime::load(&model_path)
-                let _ = model_path;
-                unimplemented!("conectar con infrastructure::runtimes::RknnRuntime::load")
             }
         }
     }

@@ -5,8 +5,7 @@
 // =============================================================================
 
 use std::sync::Arc;
-use image::imageops::FilterType;
-use image::{Rgb, RgbImage};
+use image::{ RgbImage};
 use crate::core::afora_error::AforaError;
 use crate::features::detector::application::helpers::{bytes_to_f32, f32_slice_to_bytes, hwc_u8_to_chw_f32_normalized, non_max_suppression};
 use crate::features::detector::domain::detection::{BoundingBox, Detection};

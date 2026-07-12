@@ -7,7 +7,6 @@ use crate::features::pipeline::pipeline_factory::PipelineFactory;
 use crate::features::pipeline::ports::pipeline::Pipeline;
 use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracker::tracker_factory::{TrackerChoice, TrackerFactory};
-use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSubscriber;
 use crate::features::tracking_suscribers::tracking_subscriber_factory::TrackerSubscriberChoice;
 
 pub struct PipelineBuilder {

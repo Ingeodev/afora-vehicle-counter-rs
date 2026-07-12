@@ -1,7 +1,6 @@
 use trackforge::trackers::ocsort::{OcSort, OcSortTrack};
 use crate::core::afora_error::AforaError;
 use crate::features::detector::domain::detection::{BoundingBox, Detection};
-use crate::features::detector::ports::tensor_input::TensorInput;
 use crate::features::tracker::domain::tracking_input::TrackingInput;
 use crate::features::tracker::domain::tracking_output::TrackingOutput;
 use crate::features::tracker::ports::tracker::Tracker;

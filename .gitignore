@@ -1,4 +1,6 @@
 /target
-/assets
+/assets/videos
+/assets/models
+/assets/images
 /.idea
 /.vscode

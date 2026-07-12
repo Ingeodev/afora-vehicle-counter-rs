@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{ PathBuf};
 
 use ab_glyph::FontArc;
 use ffmpeg_next as ffmpeg;

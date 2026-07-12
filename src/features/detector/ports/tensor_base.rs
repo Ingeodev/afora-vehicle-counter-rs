@@ -1,5 +1,3 @@
-use ort::value::Shape;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TensorDType {
     F32,

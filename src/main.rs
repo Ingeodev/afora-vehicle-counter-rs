@@ -4,9 +4,7 @@ use crate::features::detector::{ ModelChoice, RuntimeChoice};
 use crate::features::media_source::media_source_factory::MediaSourceChoice;
 use crate::features::pipeline::domain::pipeline_config::ExecutionMode;
 use crate::features::pipeline::pipeline_builder::PipelineBuilder;
-use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracker::tracker_factory::TrackerChoice;
-use crate::features::tracking_suscribers::adapters::logger_subscriber::LoggerSubscriber;
 use crate::features::tracking_suscribers::tracking_subscriber_factory::TrackerSubscriberChoice;
 use crate::shared::utilities::get_video_props::get_video_properties;
 

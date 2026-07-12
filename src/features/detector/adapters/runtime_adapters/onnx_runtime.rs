@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::string::String;
+use ort::ep::{CPUExecutionProvider, CUDAExecutionProvider, ExecutionProvider};
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
 use ort::value::{Tensor, ValueType};
@@ -23,7 +24,16 @@ impl OnnxRuntime {
     /// del grafo (no asumido), para que `Detector::new` pueda validar shapes
     /// contra lo que el `ModelPipeline` espera.
     pub fn load(model_path: PathBuf, num_threads: usize) -> Result<Self, AforaError> {
+
+        let cuda_provider = CUDAExecutionProvider::default();
+        let cuda_available = cuda_provider.is_available().unwrap_or(false);
+
         let session = Session::builder()
+            .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
+            .with_execution_providers([
+                cuda_provider.build(),
+                CPUExecutionProvider::default().build(),
+            ])
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
@@ -31,6 +41,12 @@ impl OnnxRuntime {
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
             .commit_from_file(model_path)
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?;
+
+        if cuda_available {
+            println!("OnnxRuntime: CUDA execution provider disponible, priorizado.");
+        } else {
+            println!("OnnxRuntime: CUDA no disponible, usando CPU execution provider.");
+        }
 
         let input_meta = session
             .inputs()
