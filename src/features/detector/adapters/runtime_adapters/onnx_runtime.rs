@@ -28,11 +28,15 @@ impl OnnxRuntime {
         let cuda_provider = CUDAExecutionProvider::default();
         let cuda_available = cuda_provider.is_available().unwrap_or(false);
 
+        println!("{:?}", cuda_available);
+
         let session = Session::builder()
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
             .with_execution_providers([
-                cuda_provider.build(),
-                CPUExecutionProvider::default().build(),
+                cuda_provider
+                    .build()
+                    .error_on_failure(),
+                //CPUExecutionProvider::default().build(),
             ])
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
             .with_optimization_level(GraphOptimizationLevel::Level3)
