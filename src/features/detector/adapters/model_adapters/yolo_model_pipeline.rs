@@ -180,8 +180,6 @@ impl ModelPipeline for YoloOnnxPipeline {
             )));
         }
 
-        println!("{:#?}", spec);
-
         let data = bytes_to_f32(raw_bytes);
 
         let num_attrs = spec.shape[1] as usize;

@@ -20,7 +20,7 @@ fn main() -> Result<(), AforaError> {
     let args = CliArgs {
         source: PathBuf::from("assets/videos/video.mp4"),
         model_path: PathBuf::from("assets/models/yolo11s.onnx"),
-        max_frames: Some(150)
+        max_frames: Some(15)
     };
 
     let mut pipeline_builder = PipelineBuilder::new();

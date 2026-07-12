@@ -22,7 +22,6 @@ impl TrackingSubscriber for LoggerSubscriber {
     }
 
     fn on_tracking_frame(&mut self, tracks: Arc<FrameTrackingProps>) -> Result<(), AforaError> {
-        println!("{:?}", tracks.tracks);
         
         Ok(())
     }

@@ -1,23 +1,19 @@
 use std::sync::Arc;
-use std::thread::JoinHandle;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use flume::{unbounded, Sender};
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::core::afora_error::AforaError;
 use crate::features::detector::Detector;
 use crate::features::media_source::domain::frame_source::FrameSource;
 use crate::features::pipeline::ports::pipeline::Pipeline;
+use crate::features::pipeline::ports::subscriber_broadcast::SubscriberBroadcast;
 use crate::features::tracker::domain::tracking_input::TrackingInput;
 use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracking_suscribers::domain::tracking_subscriber_input::{FrameTrackingProps, TrackingSubscriberInput};
-use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSubscriber;
-use crate::features::tracking_suscribers::tracking_subscriber_factory::{TrackerSubscriberChoice, TrackerSubscriberFactory};
 
 pub struct SequentialPipeline {
     media_source: Box<dyn FrameSource>,
     detector: Detector,
     tracker: Box<dyn Tracker>,
-    subscriber_senders: Vec<Sender<Arc<TrackingSubscriberInput>>>,
-    subscriber_threads: Vec<JoinHandle<Result<(), AforaError>>>,
+    broadcaster: Box<dyn SubscriberBroadcast>,
 }
 
 impl SequentialPipeline {
@@ -25,57 +21,22 @@ impl SequentialPipeline {
         media_source: Box<dyn FrameSource>,
         detector: Detector,
         tracker: Box<dyn Tracker>,
-        subscribers: Vec<TrackerSubscriberChoice>,
+        broadcaster: Box<dyn SubscriberBroadcast>,
     ) -> Self {
-
-        let mut subscriber_senders = Vec::new();
-        let mut subscriber_threads = Vec::new();
-
-        for mut subscriber_choice in subscribers {
-
-            let (tx, rx) = unbounded();
-            subscriber_senders.push(tx);
-
-
-            let handle = std::thread::spawn(move || -> Result<(), AforaError> {
-
-                let mut subscriber = TrackerSubscriberFactory::build(subscriber_choice)?;
-                
-                while let Ok(frame) = rx.recv() {
-                    subscriber.notify_event(frame)?
-                }
-                
-                Ok(())
-            });
-            subscriber_threads.push(handle);
-        }
-
         Self {
             media_source,
             detector,
             tracker,
-            subscriber_senders,
-            subscriber_threads,
+            broadcaster,
         }
     }
-
-    fn notify_event(&mut self, input: Arc<TrackingSubscriberInput>) {
-        for sender in &self.subscriber_senders {
-            let _ = sender.send(input.clone());
-        }
-    }
-    
 }
 
 impl Pipeline for SequentialPipeline {
     fn run(&mut self) -> Result<(), AforaError> {
         
-        let event_start = Arc::new(TrackingSubscriberInput::StartTracking);
-        let event_end = Arc::new(TrackingSubscriberInput::EndOfTracking);
-        
-        self.notify_event(event_start);
-        
-        
+        self.broadcaster.notify(Arc::new(TrackingSubscriberInput::StartTracking));
+
         while let Some(frame) = self.media_source.next() {
             let frame = Arc::new(frame?);
 
@@ -101,41 +62,20 @@ impl Pipeline for SequentialPipeline {
                 frame,
                 tracks,
             });
-            
+
             let event = Arc::new(TrackingSubscriberInput::FrameWithTracking(subscriber_input));
 
-            self.notify_event(event);
+            self.broadcaster.notify(event);
         }
-        
-        self.notify_event(event_end);
 
-        shutdown_subscribers(&mut self.subscriber_senders, &mut self.subscriber_threads)
+        self.broadcaster.notify(Arc::new(TrackingSubscriberInput::EndOfTracking));
+
+        self.broadcaster.shutdown()
     }
 }
 
 impl Drop for SequentialPipeline {
     fn drop(&mut self) {
-        let _ = shutdown_subscribers(&mut self.subscriber_senders, &mut self.subscriber_threads);
+        let _ = self.broadcaster.shutdown();
     }
-}
-
-fn shutdown_subscribers(
-    senders: &mut Vec<Sender<Arc<TrackingSubscriberInput>>>,
-    handles: &mut Vec<JoinHandle<Result<(), AforaError>>>,
-) -> Result<(), AforaError> {
-    senders.clear();
-
-    for handle in handles.drain(..) {
-        match handle.join() {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => return Err(e),
-            Err(_) => {
-                return Err(AforaError::PostprocessError(
-                    "Subscriber thread panicked".into(),
-                ))
-            }
-        }
-    }
-
-    Ok(())
 }
