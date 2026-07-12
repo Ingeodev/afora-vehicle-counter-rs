@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::string::String;
-use ort::ep::{CPUExecutionProvider, CUDAExecutionProvider, ExecutionProvider};
+use ort::execution_providers::{CPUExecutionProvider, CUDAExecutionProvider, ExecutionProvider};
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
 use ort::value::{Tensor, ValueType};
@@ -49,18 +49,18 @@ impl OnnxRuntime {
         }
 
         let input_meta = session
-            .inputs()
+            .inputs
             .first()
             .ok_or_else(|| AforaError::RuntimeLoadError("el modelo no declara inputs".into()))?;
         let output_meta = session
-            .outputs()
+            .outputs
             .first()
             .ok_or_else(|| AforaError::RuntimeLoadError("el modelo no declara outputs".into()))?;
 
-        let input_spec = Self::tensor_spec_from_ort_type(&input_meta.dtype())?;
-        let output_spec = Self::tensor_spec_from_ort_type(&output_meta.dtype())?;
-        let input_name = String::from(input_meta.name());
-        let output_name = String::from(output_meta.name());
+        let input_spec = Self::tensor_spec_from_ort_type(&input_meta.input_type)?;
+        let output_spec = Self::tensor_spec_from_ort_type(&output_meta.output_type)?;
+        let input_name = String::from(input_meta.name.clone());
+        let output_name = String::from(output_meta.name.clone());
 
         Ok(Self {
             session,
