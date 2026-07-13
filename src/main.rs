@@ -14,16 +14,12 @@ mod shared;
 
 fn main() -> Result<(), AforaError> {
 
-
-    let args = CliArgs {
-        source: PathBuf::from("assets/videos/video.mp4"),
-        model_path: PathBuf::from("assets/models/yolo11s_dyn.onnx"),
-        max_frames: Some(100),
-        video_output_path: PathBuf::from("assets/videos/output100.mp4"),
-        batch_size: 12
-    };
-
     let args = CliArgs::parse()?;
+
+    crate::shared::debug::set_debug(args.debug);
+    if args.debug {
+        crate::shared::stacktrace::init();
+    }
 
     let mut pipeline_builder = PipelineBuilder::new();
 
@@ -33,7 +29,7 @@ fn main() -> Result<(), AforaError> {
         })?;
 
     let mut pipeline =pipeline_builder
-        .set_execution_mode(ExecutionMode::Multithreaded)
+        .set_execution_mode(ExecutionMode::Sequential)
         .set_media_source(MediaSourceChoice::Video {
             path: args.source.clone(),
             max_frames: args.max_frames,
@@ -64,7 +60,11 @@ fn main() -> Result<(), AforaError> {
         })
         .build()?;
 
-    if let Err(err) =pipeline.run() {
+    let result = pipeline.run();
+    if args.debug {
+        let _ = crate::shared::stacktrace::flush_csv("stacktrace.csv");
+    }
+    if let Err(err) = result {
         println!("Error: {}", err);
     }
 
@@ -77,6 +77,7 @@ struct CliArgs {
     pub model_path: PathBuf,
     pub max_frames: Option<i32>,
     pub video_output_path: PathBuf,
+    pub debug: bool,
     batch_size: u32,
 }
 
@@ -88,6 +89,7 @@ impl CliArgs {
         let mut video_output_path = None;
         let mut max_frames: Option<i32> = None;
         let mut batch_size: u32 = 1;
+        let mut debug = false;
 
         let mut args = std::env::args().skip(1);
 
@@ -114,12 +116,15 @@ impl CliArgs {
                 }
 
                 "--batch_size" => {
-
                     if let Some(arg) = args.next() {
                         if let Ok(num) = arg.parse() {
                             batch_size = num;
                         }
                     }
+                }
+
+                "--debug" => {
+                    debug = true;
                 }
 
                 _ => {}
@@ -144,6 +149,8 @@ impl CliArgs {
                     "missing --model".into()
                 )
             })?.parse().unwrap(),
+
+            debug,
 
             batch_size,
 

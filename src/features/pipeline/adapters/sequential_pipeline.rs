@@ -8,6 +8,7 @@ use crate::features::pipeline::ports::subscriber_broadcast::SubscriberBroadcast;
 use crate::features::tracker::domain::tracking_input::TrackingInput;
 use crate::features::tracker::ports::tracker::Tracker;
 use crate::features::tracking_suscribers::domain::tracking_subscriber_input::{FrameTrackingProps, TrackingSubscriberInput};
+use crate::stacktrace;
 
 pub struct SequentialPipeline {
     media_source: Box<dyn FrameSource>,
@@ -61,7 +62,9 @@ impl Pipeline for SequentialPipeline {
                 break;
             }
 
-            let detections_batch = self.detector.detect(batch.clone())?;
+            let detections_batch = stacktrace!("detection", 
+                self.detector.detect(batch.clone())
+            )?;
 
             for (frame, detections) in batch.into_iter().zip(detections_batch) {
 
