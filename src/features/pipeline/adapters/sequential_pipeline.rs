@@ -62,7 +62,7 @@ impl Pipeline for SequentialPipeline {
                 break;
             }
 
-            let detections_batch = stacktrace!("detection", 
+            let detections_batch = stacktrace!("detection", "inference", 
                 self.detector.detect(batch.clone())
             )?;
 

@@ -103,14 +103,4 @@ macro_rules! stacktrace {
             $block
         }
     }};
-    ($id:expr, $block:expr) => {{
-        if $crate::shared::stacktrace::should_record("") {
-            let __start = $crate::shared::stacktrace::now_ms();
-            let __result = $block;
-            $crate::shared::stacktrace::register($id, __start, $crate::shared::stacktrace::now_ms());
-            __result
-        } else {
-            $block
-        }
-    }};
 }
