@@ -39,18 +39,24 @@ pub fn register(name: &str, start_ms: u128, end_ms: u128) {
 
 pub fn flush_csv(path: &str) -> std::io::Result<()> {
     use std::io::Write;
+    use std::collections::HashMap;
+
     let entries = REGISTRY.lock().map_err(|_| {
         std::io::Error::new(std::io::ErrorKind::Other, "lock poisoned")
     })?;
 
     let base = entries.iter().map(|e| e.start_ms).min().unwrap_or(0);
 
+    let mut counters: HashMap<&str, usize> = HashMap::new();
     let mut file = std::fs::File::create(path)?;
-    writeln!(file, "process_name,start_ms,end_ms")?;
+    writeln!(file, "Paso\tInicio\tFin\tDuración")?;
     for entry in entries.iter() {
+        let counter = counters.entry(&entry.process_name).or_insert(0);
+        *counter += 1;
         let start = entry.start_ms.saturating_sub(base);
         let end = entry.end_ms.saturating_sub(base);
-        writeln!(file, "{},{},{}", entry.process_name, start, end)?;
+        let duration = end.saturating_sub(start);
+        writeln!(file, "{} {}\t{}\t{}\t{}", entry.process_name, counter, start, end, duration)?;
     }
     file.flush()
 }
