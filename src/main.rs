@@ -18,7 +18,7 @@ fn main() -> Result<(), AforaError> {
 
     crate::shared::debug::set_debug(args.debug);
     if args.debug {
-        crate::shared::stacktrace::init();
+        crate::shared::stacktrace::init(args.debug_tags.as_deref());
     }
 
     let mut pipeline_builder = PipelineBuilder::new();
@@ -78,6 +78,7 @@ struct CliArgs {
     pub max_frames: Option<i32>,
     pub video_output_path: PathBuf,
     pub debug: bool,
+    pub debug_tags: Option<String>,
     batch_size: u32,
 }
 
@@ -90,8 +91,9 @@ impl CliArgs {
         let mut max_frames: Option<i32> = None;
         let mut batch_size: u32 = 1;
         let mut debug = false;
+        let mut debug_tags: Option<String> = None;
 
-        let mut args = std::env::args().skip(1);
+        let mut args = std::env::args().skip(1).peekable();
 
         while let Some(arg) = args.next() {
 
@@ -125,6 +127,11 @@ impl CliArgs {
 
                 "--debug" => {
                     debug = true;
+                    if let Some(next) = args.peek() {
+                        if !next.starts_with("--") {
+                            debug_tags = args.next();
+                        }
+                    }
                 }
 
                 _ => {}
@@ -151,6 +158,7 @@ impl CliArgs {
             })?.parse().unwrap(),
 
             debug,
+            debug_tags,
 
             batch_size,
 
