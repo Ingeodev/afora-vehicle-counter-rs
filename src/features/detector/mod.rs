@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use crate::core::afora_error::AforaError;
 use crate::features::detector::adapters::model_adapters::yolo_model_pipeline::YoloOnnxPipeline;
+use crate::features::detector::adapters::model_adapters::yolo_onnx_pipeline::YoloOnnxOptimizedPipeline;
 use crate::features::detector::adapters::runtime_adapters::onnx_runtime::OnnxRuntime;
 use crate::features::detector::domain::detection::Detection;
 use crate::features::detector::ports::inference_runtime::InferenceRuntime;
@@ -59,15 +60,15 @@ impl Detector {
             ));
         }
 
-        let input = stacktrace!("detection_preprocessing", "into_model",
+        let input = stacktrace!("detection_preprocessing", "detect",
             self.pipeline.preprocess(frames.clone(), self.runtime.input_spec())
         )?;
 
-        let output = stacktrace!("detection_inference", "inference",
+        let output = stacktrace!("detection_inference", "detect",
             self.runtime.run(&input)
         )?;
 
-        stacktrace!("detection_postprocessing", "postprocess",
+        stacktrace!("detection_postprocessing", "detect",
             self.pipeline.postprocess(output, frames[0].original_size())
         )
     }
@@ -103,6 +104,8 @@ pub enum RuntimeChoice {
 pub enum ModelChoice {
     PpYoloePlusS { conf_threshold: f32 },
     YoloOnnx { conf_threshold: f32,  input_side: u32, batch_size: u32 },
+    /// Pipeline optimizado para YOLO — usar este para mejor rendimiento.
+    YoloOnnxOptimized { conf_threshold: f32, input_side: u32, batch_size: u32 },
     RfDetr { conf_threshold: f32 },
 }
 
@@ -139,8 +142,10 @@ impl DetectorFactory {
                 unimplemented!("conectar con infrastructure::pipelines::PpYoloePipeline::new")
             }
             ModelChoice::YoloOnnx { conf_threshold, input_side, batch_size } => {
-                let _ = conf_threshold;
                 Box::new(YoloOnnxPipeline::new(input_side, conf_threshold, 0.45, batch_size))
+            }
+            ModelChoice::YoloOnnxOptimized { conf_threshold, input_side, batch_size } => {
+                Box::new(YoloOnnxOptimizedPipeline::new(input_side, conf_threshold, 0.45, batch_size))
             }
             ModelChoice::RfDetr { conf_threshold } => {
                 let _ = conf_threshold;
