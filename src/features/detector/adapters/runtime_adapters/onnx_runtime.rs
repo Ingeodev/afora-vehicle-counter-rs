@@ -35,7 +35,7 @@ impl OnnxRuntime {
             .with_execution_providers([
                 cuda_provider
                     .build()
-                    //.error_on_failure(),
+                    .error_on_failure(),
                 //CPUExecutionProvider::default().build(),
             ])
             .map_err(|e| AforaError::RuntimeLoadError(e.to_string()))?
