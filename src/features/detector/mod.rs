@@ -58,16 +58,16 @@ impl Detector {
                 "El batch está vacío".into(),
             ));
         }
-        
-        let input = stacktrace!("detection_preprocessing", 
+
+        let input = stacktrace!("detection_preprocessing", "into_model",
             self.pipeline.preprocess(frames.clone(), self.runtime.input_spec())
         )?;
-        
-        let output = stacktrace!("detection_inference", 
+
+        let output = stacktrace!("detection_inference", "inference",
             self.runtime.run(&input)
         )?;
 
-        stacktrace!("detection_postprocessing", 
+        stacktrace!("detection_postprocessing", "postprocess",
             self.pipeline.postprocess(output, frames[0].original_size())
         )
     }
