@@ -23,7 +23,7 @@ fn main() -> Result<(), AforaError> {
         batch_size: 12
     };
 
-    //let args = CliArgs::parse()?;
+    let args = CliArgs::parse()?;
 
     let mut pipeline_builder = PipelineBuilder::new();
 
