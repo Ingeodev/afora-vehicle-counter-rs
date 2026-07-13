@@ -137,7 +137,8 @@ flowchart TD
 **Adapters**:
 | ModelPipeline | Hardware | Description |
 |---|---|---|
-| `YoloOnnxPipeline` | `OnnxRuntime` | YOLOv8/YOLO11 via ONNX Runtime (optimized Level 3, inter/intra threads) |
+| `YoloOnnxPipeline` | `OnnxRuntime` | YOLOv8/YOLO11 baseline implementation |
+| `YoloOnnxOptimizedPipeline` | `OnnxRuntime` | **Recommended** — SIMD preprocessing, thread-local buffers, LUT normalization |
 
 ---
 
@@ -349,28 +350,158 @@ The `?` operator propagates errors naturally through the pipeline, with descript
 
 | Crate | Version | Role |
 |---|---|---|
-| `ort` | 2.0.0-rc.12 | ONNX Runtime bindings |
+| `ort` | 2.0.0-rc.10 | ONNX Runtime bindings (CUDA support) |
 | `ffmpeg-next` | 8.1.0 | Video decoding & encoding |
 | `trackforge` | 0.3.0 | OC-SORT tracking algorithm |
 | `flume` | 0.12.0 | MPSC channels for subscriber threads |
 | `image` | 0.25.10 | Image manipulation |
 | `imageproc` | 0.25 | Drawing overlays (bboxes, text) |
 | `ab_glyph` | 0.2.32 | TrueType font rendering |
+| `fast_image_resize` | 6 | SIMD-accelerated image resize (AVX2/SSE4.1) |
+| `rayon` | 1 | Data parallelism for batch preprocessing |
 
 ---
 
 ## Getting Started
 
 ```bash
-# Build
+# Build (IMPORTANT: always use --release for production)
 cargo build --release
 
 # Run
-./target/release/afora_vc \
+cargo run --release -- \
     --source assets/videos/video.mp4 \
     --model assets/models/yolo11s.onnx \
-    --max_frames 150
+    --max_frames 150 \
+    --video_output_path output.mp4 \
+    --batch_size 1
+
+# Run with debug profiling (generates stacktrace.csv)
+cargo run --release -- \
+    --source assets/videos/video.mp4 \
+    --model assets/models/yolo11s.onnx \
+    --max_frames 10 \
+    --video_output_path output.mp4 \
+    --batch_size 1 \
+    --debug
 ```
+
+> ⚠️ **CRITICAL**: Always use `--release` flag. Debug builds are ~100x slower due to missing SIMD optimizations.
+
+---
+
+## Preprocessing Pipeline
+
+The preprocessing stage transforms raw video frames into tensors suitable for YOLO inference. This is a critical performance bottleneck that has been heavily optimized.
+
+### Architecture
+
+```
+Frame (2560x1440 RGB) 
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  PreprocessingEngine                                    │
+│  ├── thread_local ScratchContext (per Rayon thread)    │
+│  │   ├── Resizer (reused, expensive to create)         │
+│  │   └── dst_image buffer (reused across frames)       │
+│  │                                                      │
+│  └── Processing steps:                                  │
+│      1. ImageRef::new() — zero-copy reference          │
+│      2. SIMD resize (AVX2/SSE4.1) via fast_image_resize│
+│      3. Letterbox padding (aspect ratio preservation)  │
+│      4. Pack to tensor format (NCHW/NHWC)              │
+│      5. Normalize via LUT (no divisions)               │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+TensorInput (1x3x640x640 F32, ~4.9MB)
+```
+
+### Key Optimizations
+
+| Optimization | Before | After | Impact |
+|--------------|--------|-------|--------|
+| **SIMD resize** | ~300ms | ~2ms | AVX2/SSE4.1 acceleration via `fast_image_resize` |
+| **Zero-copy ImageRef** | Copy 11MB | Reference | Eliminates frame copy before resize |
+| **Thread-local scratch** | Alloc per frame | Reuse buffers | No allocations in hot path |
+| **LUT normalization** | `pixel / 255.0` | `LUT[pixel]` | Division-free normalization |
+| **Direct tensor write** | Intermediate buffer | Write to final | Single pass, no temp allocations |
+
+### Performance Results
+
+| Stage | Debug Build | Release Build |
+|-------|-------------|---------------|
+| Preprocessing | 300-400ms | **3-4ms** |
+| Inference (GPU) | ~200ms | ~85-100ms |
+| Postprocessing | ~25ms | ~1-2ms |
+| **Total/frame** | ~600ms | **~90-110ms** |
+
+### System Requirements for SIMD
+
+The preprocessing relies on CPU SIMD instructions. Verify your CPU supports them:
+
+```bash
+# Check CPU features
+cat /proc/cpuinfo | grep -E "avx2|sse4"
+
+# Expected output should include:
+# flags: ... sse4_1 sse4_2 ... avx avx2 ...
+```
+
+The `fast_image_resize` library auto-detects and uses the best available:
+- **AVX2** (preferred) — 256-bit SIMD, ~8 pixels/instruction
+- **SSE4.1** (fallback) — 128-bit SIMD, ~4 pixels/instruction
+- **None** — Scalar fallback (very slow)
+
+### Supported Tensor Formats
+
+The preprocessing engine supports multiple output formats based on `TensorSpec`:
+
+| Layout | DType | Use Case |
+|--------|-------|----------|
+| NCHW | F32 | Standard YOLO (default) |
+| NCHW | U8 | Quantized models |
+| NCHW | I8 | INT8 quantized models |
+| NHWC | U8 | TFLite-style models |
+| NHWC | I8 | TFLite INT8 models |
+
+### Module Structure
+
+```
+src/features/detector/adapters/model_adapters/yolo_onnx_pipeline/
+├── mod.rs                      # Module exports
+├── pipeline.rs                 # YoloOnnxOptimizedPipeline (implements ModelPipeline)
+├── postprocessing.rs           # NMS and bbox decoding
+└── preprocessing/
+    ├── mod.rs                  # Exports PreprocessingEngine
+    ├── engine.rs               # Orchestrator with Rayon parallelism
+    ├── scratch.rs              # ScratchContext with specialized pack functions
+    └── lut.rs                  # NORM_F32_LUT and padding constants
+```
+
+### Troubleshooting Performance
+
+If preprocessing is slow (>10ms per frame):
+
+1. **Verify release build**: `cargo run --release -- ...`
+   - Debug builds disable SIMD and are ~100x slower
+   
+2. **Check SIMD detection**: Add this temporarily to verify:
+   ```rust
+   eprintln!("CPU extensions: {:?}", resizer.cpu_extensions());
+   ```
+   Should print `Avx2` or `Sse4_1`, NOT `None`
+
+3. **Check frame dimensions**: Larger frames = longer resize
+   - 1920x1080 → 640x640: ~1-2ms
+   - 2560x1440 → 640x640: ~2-3ms
+   - 3840x2160 → 640x640: ~4-6ms
+
+4. **Profile with stacktrace**: Run with `--debug` flag, then analyze `stacktrace.csv`:
+   ```bash
+   cat stacktrace.csv | grep "resize_simd\|detection_preprocessing"
+   ```
 
 ---
 

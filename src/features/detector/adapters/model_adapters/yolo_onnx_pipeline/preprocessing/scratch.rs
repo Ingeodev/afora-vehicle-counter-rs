@@ -46,8 +46,10 @@ pub struct ScratchContext {
 impl ScratchContext {
     /// Crea un nuevo contexto de trabajo.
     pub fn new(target_side: u32) -> Self {
+        let resizer = Resizer::new();
+        
         Self {
-            resizer: Resizer::new(),
+            resizer,
             dst_image: None,
             current_dst_size: (0, 0),
             target_side,

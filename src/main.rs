@@ -34,7 +34,7 @@ fn main() -> Result<(), AforaError> {
             path: args.source.clone(),
             max_frames: args.max_frames,
         })?
-        .set_model(ModelChoice::YoloOnnx {
+        .set_model(ModelChoice::YoloOnnxOptimized {
             conf_threshold: 0.25,
             input_side: 640, //TODO: Add to args
             batch_size: args.batch_size
