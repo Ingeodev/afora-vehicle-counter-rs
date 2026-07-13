@@ -34,41 +34,69 @@ impl SequentialPipeline {
 
 impl Pipeline for SequentialPipeline {
     fn run(&mut self) -> Result<(), AforaError> {
-        
-        self.broadcaster.notify(Arc::new(TrackingSubscriberInput::StartTracking));
 
-        while let Some(frame) = self.media_source.next() {
-            let frame = Arc::new(frame?);
+        self.broadcaster
+            .notify(Arc::new(TrackingSubscriberInput::StartTracking));
 
-            let detections = self.detector.detect(frame.clone())?;
+        loop {
+            
+            let batch_size = self.detector.pipeline.expected_input_shape().0 as usize;
 
-            let tracks = self.tracker.update(TrackingInput {
-                frame: frame.clone(),
-                detections,
-            })?;
+            let mut batch = Vec::with_capacity(batch_size);
 
-            //TODO: Cambiar esto por los datos reales desde la construccion del frame
-            let time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|_| {
-                    AforaError::PostprocessError(
-                        "SystemTime before UNIX EPOCH!".into(),
-                    )
+            while batch.len() < batch_size {
+
+                match self.media_source.next() {
+
+                    Some(frame) => {
+                        batch.push(Arc::new(frame?));
+                    }
+
+                    None => break,
+                }
+            }
+
+            // No quedan más frames
+            if batch.is_empty() {
+                break;
+            }
+
+            let detections_batch = self.detector.detect(batch.clone())?;
+
+            for (frame, detections) in batch.into_iter().zip(detections_batch) {
+
+                let tracks = self.tracker.update(TrackingInput {
+                    frame: frame.clone(),
+                    detections,
                 })?;
 
-            let subscriber_input = Arc::new(FrameTrackingProps {
-                frame_id: time.as_secs(),
-                timestamp: time,
-                frame,
-                tracks,
-            });
+                let time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| {
+                        AforaError::PostprocessError(
+                            "SystemTime before UNIX EPOCH!".into(),
+                        )
+                    })?;
 
-            let event = Arc::new(TrackingSubscriberInput::FrameWithTracking(subscriber_input));
+                let subscriber_input = Arc::new(FrameTrackingProps {
+                    frame_id: time.as_secs(),
+                    timestamp: time,
+                    frame,
+                    tracks,
+                });
 
-            self.broadcaster.notify(event);
+                self.broadcaster.notify(
+                    Arc::new(
+                        TrackingSubscriberInput::FrameWithTracking(
+                            subscriber_input,
+                        ),
+                    ),
+                );
+            }
         }
 
-        self.broadcaster.notify(Arc::new(TrackingSubscriberInput::EndOfTracking));
+        self.broadcaster
+            .notify(Arc::new(TrackingSubscriberInput::EndOfTracking));
 
         self.broadcaster.shutdown()
     }

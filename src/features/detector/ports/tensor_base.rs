@@ -29,10 +29,19 @@ impl TensorSpec {
 
     /// Verifica si un shape lógico (C, H, W) es compatible con este spec,
     /// contemplando tanto NCHW como NHWC con batch=1.
-    pub fn matches_logical_shape(&self, c: u32, h: u32, w: u32) -> bool {
-        let nchw = vec![1, c as i64, h as i64, w as i64];
-        let nhwc = vec![1, h as i64, w as i64, c as i64];
-        self.shape == nchw || self.shape == nhwc
+    pub fn matches_logical_shape(&self, b: u32, c: u32, h: u32, w: u32) -> bool {
+        let nchw = [b as i64, c as i64, h as i64, w as i64];
+        let nhwc = [b as i64, h as i64, w as i64, c as i64];
+
+        fn matches(spec: &[i64], expected: &[i64]) -> bool {
+            spec.len() == expected.len()
+                && spec
+                .iter()
+                .zip(expected.iter())
+                .all(|(&s, &e)| s == -1 || s == e)
+        }
+
+        matches(&self.shape, &nchw) || matches(&self.shape, &nhwc)
     }
 }
 

@@ -6,7 +6,7 @@ use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSu
 pub type SubscriberBuilder = Box<dyn FnOnce() -> Result<Box<dyn TrackingSubscriber>, AforaError> + Send>;
 
 
-pub trait SubscriberBroadcast {
+pub trait SubscriberBroadcast: Send {
     fn notify(&mut self, input: Arc<TrackingSubscriberInput>);
     fn shutdown(&mut self) -> Result<(), AforaError>;
 }

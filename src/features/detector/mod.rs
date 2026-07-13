@@ -21,7 +21,7 @@ use self::ports::tensor_base::*;
 
 pub struct Detector {
     runtime: Box<dyn InferenceRuntime>,
-    pipeline: Box<dyn ModelPipeline>,
+    pub(crate) pipeline: Box<dyn ModelPipeline>,
 }
 
 impl Detector {
@@ -39,11 +39,11 @@ impl Detector {
         runtime: &dyn InferenceRuntime,
         pipeline: &dyn ModelPipeline,
     ) -> Result<(), AforaError> {
-        let (c, h, w) = pipeline.expected_input_shape();
+        let (b, c, h, w) = pipeline.expected_input_shape();
         let spec = runtime.input_spec();
-        if !spec.matches_logical_shape(c, h, w) {
+        if !spec.matches_logical_shape(b, c, h, w) {
             return Err(AforaError::ShapeMismatch {
-                expected: (c, h, w),
+                expected: (b, c, h, w),
                 actual: spec.shape.clone(),
             });
         }
@@ -51,10 +51,15 @@ impl Detector {
     }
 
     /// Ejecuta el pipeline completo: preprocess -> run -> postprocess.
-    pub fn detect(&mut self, frame: Arc<Frame>) -> Result<Vec<Detection>, AforaError> {
-        let input = self.pipeline.preprocess(frame.clone(), self.runtime.input_spec())?;
+    pub fn detect(&mut self, frames: Vec<Arc<Frame>>) -> Result<Vec<Vec<Detection>>, AforaError> {
+        if frames.is_empty() {
+            return Err(AforaError::PreprocessError(
+                "El batch está vacío".into(),
+            ));
+        }
+        let input = self.pipeline.preprocess(frames.clone(), self.runtime.input_spec())?;
         let output = self.runtime.run(&input)?;
-        self.pipeline.postprocess(output, frame.original_size())
+        self.pipeline.postprocess(output, frames[0].original_size())
     }
 
     pub fn runtime_name(&self) -> &'static str {
@@ -87,7 +92,7 @@ pub enum RuntimeChoice {
 /// Selección de arquitectura de modelo a construir.
 pub enum ModelChoice {
     PpYoloePlusS { conf_threshold: f32 },
-    YoloOnnx { conf_threshold: f32 },
+    YoloOnnx { conf_threshold: f32,  input_side: u32, batch_size: u32 },
     RfDetr { conf_threshold: f32 },
 }
 
@@ -123,9 +128,9 @@ impl DetectorFactory {
                 // Reemplazar por: Box::new(PpYoloePipeline::new(conf_threshold))
                 unimplemented!("conectar con infrastructure::pipelines::PpYoloePipeline::new")
             }
-            ModelChoice::YoloOnnx { conf_threshold } => {
+            ModelChoice::YoloOnnx { conf_threshold, input_side, batch_size } => {
                 let _ = conf_threshold;
-                Box::new(YoloOnnxPipeline::new(640, conf_threshold, 0.45))
+                Box::new(YoloOnnxPipeline::new(input_side, conf_threshold, 0.45, batch_size))
             }
             ModelChoice::RfDetr { conf_threshold } => {
                 let _ = conf_threshold;
@@ -141,7 +146,7 @@ impl DetectorFactory {
 
 #[cfg(test)]
 mod tests {
-    use ort::value::Shape;
+    use ort::tensor::Shape;
     use crate::features::detector::ports::tensor_input::TensorInput;
     use crate::features::detector::ports::tensor_output::TensorOutput;
     use super::*;
@@ -163,24 +168,24 @@ mod tests {
     }
 
     struct FakePipeline {
-        expected_shape: (u32, u32, u32),
+        expected_shape: (u32, u32, u32, u32),
     }
 
     impl ModelPipeline for FakePipeline {
-        fn preprocess(&self, _frame: Arc<Frame>, _target_spec: &TensorSpec) -> Result<TensorInput, AforaError> {
+        fn preprocess(&self, _frame: Vec<Arc<Frame>>, _target_spec: &TensorSpec) -> Result<TensorInput, AforaError> {
             Ok(TensorInput::new(vec![], self.expected_shape_as_spec()))
         }
-        fn postprocess(&self, _output: TensorOutput, _original_size: (u32, u32)) -> Result<Vec<Detection>, AforaError> {
+        fn postprocess(&self, _output: TensorOutput, _original_size: (u32, u32)) -> Result<Vec<Vec<Detection>>, AforaError> {
             Ok(vec![])
         }
         fn model_name(&self) -> &'static str { "fake_model" }
-        fn expected_input_shape(&self) -> (u32, u32, u32) { self.expected_shape }
+        fn expected_input_shape(&self) -> (u32, u32, u32, u32) { self.expected_shape }
         //fn class_taxonomy(&self) -> &'static [&'static str] { &["car", "motorcycle"] }
     }
 
     impl FakePipeline {
         fn expected_shape_as_spec(&self) -> TensorSpec {
-            let (c, h, w) = self.expected_shape;
+            let (b, c, h, w) = self.expected_shape;
             TensorSpec::new(vec![1, c as i64 , h as i64 , w as i64], TensorDType::F32, TensorLayout::Nchw)
         }
     }
@@ -192,7 +197,7 @@ mod tests {
             output_spec: TensorSpec::new(vec![1, 100, 6], TensorDType::F32, TensorLayout::Nchw),
         });
         let pipeline = Box::new(FakePipeline {
-            expected_shape: (3, 640, 640),
+            expected_shape: (1, 3, 640, 640),
         });
 
         let detector = Detector::new(runtime, pipeline);
@@ -206,7 +211,7 @@ mod tests {
             output_spec: TensorSpec::new(vec![1, 100, 6], TensorDType::F32, TensorLayout::Nchw),
         });
         let pipeline = Box::new(FakePipeline {
-            expected_shape: (3, 640, 640), // no coincide con el runtime (320x320)
+            expected_shape: (1, 3, 640, 640), // no coincide con el runtime (320x320)
         });
 
         let result = Detector::new(runtime, pipeline);

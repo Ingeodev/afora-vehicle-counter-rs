@@ -10,7 +10,7 @@ pub enum AforaError {
     },
     /// El shape que el pipeline espera no coincide con el spec real del modelo cargado
     ShapeMismatch {
-        expected: (u32, u32, u32),
+        expected: (u32, u32, u32, u32),
         actual: Vec<i64>,
     },
     /// Error al cargar el modelo en el runtime (archivo corrupto, backend no disponible, etc.)

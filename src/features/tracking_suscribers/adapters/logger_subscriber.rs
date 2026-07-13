@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use crate::core::afora_error::AforaError;
 use crate::features::tracking_suscribers::domain::tracking_subscriber_input::{FrameTrackingProps};
@@ -7,8 +8,8 @@ use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSu
 use indicatif::{ProgressBar, ProgressStyle};
 
 pub struct LoggerSubscriber {
-    fps: usize,
-    frame_counter:  VecDeque<Instant>,
+    fps: Arc<AtomicUsize>,
+    total_frames: Arc<AtomicUsize>,
     status: ProgressBar,
 }
 
@@ -24,9 +25,9 @@ impl LoggerSubscriber {
 
 
         LoggerSubscriber {
-            fps: 0,
-            frame_counter: VecDeque::new(),
-            status
+            fps: Arc::new(AtomicUsize::new(0)),
+            total_frames: Arc::new(AtomicUsize::new(0)),
+            status,
         }
     }
 }
@@ -34,7 +35,32 @@ impl LoggerSubscriber {
 impl TrackingSubscriber for LoggerSubscriber {
 
     fn on_tracking_start(&mut self) -> Result<(), AforaError> {
+
         println!("Tracking started");
+
+        let fps = self.fps.clone();
+        let total_frames = self.total_frames.clone();
+        let status = self.status.clone();
+
+        std::thread::spawn(move || {
+
+            loop {
+
+                std::thread::sleep(Duration::from_secs(1));
+
+                let current_fps = fps.swap(0, Ordering::Relaxed);
+                let total = total_frames.load(Ordering::Relaxed);
+
+                status.set_message(format!(
+                    "FPS: {} / total frames: {}",
+                    current_fps,
+                    total
+                ));
+
+                status.tick();
+            }
+
+        });
 
         Ok(())
     }
@@ -42,23 +68,8 @@ impl TrackingSubscriber for LoggerSubscriber {
     fn on_tracking_frame(&mut self, tracks: Arc<FrameTrackingProps>) -> Result<(), AforaError> {
         let now = Instant::now();
 
-        // Guardar el instante del frame actual
-        self.frame_counter.push_back(now);
-
-        // Eliminar todos los que tengan más de 1 segundo
-        while let Some(front) = self.frame_counter.front() {
-            if now.duration_since(*front) > Duration::from_secs(1) {
-                self.frame_counter.pop_front();
-            } else {
-                break;
-            }
-        }
-
-        // FPS del último segundo
-        self.fps = self.frame_counter.len();
-
-        self.status.set_message(format!("FPS: {}", self.fps));
-        self.status.tick();
+        self.fps.fetch_add(1, Ordering::Relaxed);
+        self.total_frames.fetch_add(1, Ordering::Relaxed);
 
         Ok(())
     }

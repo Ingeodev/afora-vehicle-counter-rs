@@ -13,16 +13,17 @@ pub mod core;
 mod shared;
 
 fn main() -> Result<(), AforaError> {
-    
+
 
     let args = CliArgs {
         source: PathBuf::from("assets/videos/video.mp4"),
-        model_path: PathBuf::from("assets/models/yolo11s.onnx"),
-        max_frames: Some(15),
-        video_output_path: PathBuf::from("assets/videos/output2.mp4"),
+        model_path: PathBuf::from("assets/models/yolo11s_dyn.onnx"),
+        max_frames: Some(100),
+        video_output_path: PathBuf::from("assets/videos/output100.mp4"),
+        batch_size: 12
     };
 
-    let args = CliArgs::parse()?;
+    //let args = CliArgs::parse()?;
 
     let mut pipeline_builder = PipelineBuilder::new();
 
@@ -32,13 +33,15 @@ fn main() -> Result<(), AforaError> {
         })?;
 
     let mut pipeline =pipeline_builder
-        .set_execution_mode(ExecutionMode::Sequential)
+        .set_execution_mode(ExecutionMode::Multithreaded)
         .set_media_source(MediaSourceChoice::Video {
             path: args.source.clone(),
             max_frames: args.max_frames,
         })?
         .set_model(ModelChoice::YoloOnnx {
             conf_threshold: 0.25,
+            input_side: 640, //TODO: Add to args
+            batch_size: args.batch_size
         })
         .set_runtime(RuntimeChoice::Onnx {
             model_path: args.model_path.clone(),
@@ -74,6 +77,7 @@ struct CliArgs {
     pub model_path: PathBuf,
     pub max_frames: Option<i32>,
     pub video_output_path: PathBuf,
+    batch_size: u32,
 }
 
 impl CliArgs {
@@ -83,6 +87,7 @@ impl CliArgs {
         let mut model = None;
         let mut video_output_path = None;
         let mut max_frames: Option<i32> = None;
+        let mut batch_size: u32 = 1;
 
         let mut args = std::env::args().skip(1);
 
@@ -108,6 +113,15 @@ impl CliArgs {
                     video_output_path = args.next();
                 }
 
+                "--batch_size" => {
+
+                    if let Some(arg) = args.next() {
+                        if let Ok(num) = arg.parse() {
+                            batch_size = num;
+                        }
+                    }
+                }
+
                 _ => {}
             }
         }
@@ -130,6 +144,8 @@ impl CliArgs {
                     "missing --model".into()
                 )
             })?.parse().unwrap(),
+
+            batch_size,
 
             max_frames,
         })
