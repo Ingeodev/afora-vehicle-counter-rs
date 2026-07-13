@@ -14,6 +14,7 @@ use crate::core::afora_error::AforaError;
 use crate::features::tracker::domain::tracking_output::TrackingOutput;
 use crate::shared::domain::frame::Frame;
 use crate::shared::domain::overlay::{draw_overlays, load_default_font};
+use crate::stacktrace;
 use ffmpeg::encoder::video::Encoder as OpenedVideoEncoder;
 
 pub struct VideoWriter {
@@ -129,26 +130,38 @@ impl VideoWriter {
             )));
         }
 
-        let mut image = RgbImage::from_raw(frame.width, frame.height, frame.data.clone())
-            .ok_or_else(|| AforaError::PostprocessError("Invalid RGB image.".into()))?;
+        let mut image = stacktrace!("vw_rgb_image_clone", "video_writer", {
+            RgbImage::from_raw(frame.width, frame.height, frame.data.clone())
+                .ok_or_else(|| AforaError::PostprocessError("Invalid RGB image.".into()))
+        })?;
 
-        draw_overlays(&mut image, tracks, &self.font);
+        stacktrace!("vw_draw_overlays", "video_writer", {
+            draw_overlays(&mut image, tracks, &self.font)
+        });
 
-        let rgb_frame = rgb_image_to_ffmpeg_frame(&image);
+        let rgb_frame = stacktrace!("vw_rgb_to_ffmpeg", "video_writer", {
+            rgb_image_to_ffmpeg_frame(&image)
+        });
 
         let mut yuv_frame = FfmpegVideoFrame::empty();
-        self.scaler
-            .run(&rgb_frame, &mut yuv_frame)
-            .map_err(|e| AforaError::MediaError(e.to_string()))?;
+        stacktrace!("vw_rgb_to_yuv_scale", "video_writer", {
+            self.scaler
+                .run(&rgb_frame, &mut yuv_frame)
+                .map_err(|e| AforaError::MediaError(e.to_string()))
+        })?;
 
         yuv_frame.set_pts(Some(self.frame_index));
         self.frame_index += 1;
 
-        self.encoder
-            .send_frame(&yuv_frame)
-            .map_err(|e| AforaError::MediaError(e.to_string()))?;
+        stacktrace!("vw_encoder_send", "video_writer", {
+            self.encoder
+                .send_frame(&yuv_frame)
+                .map_err(|e| AforaError::MediaError(e.to_string()))
+        })?;
 
-        self.drain_encoder()
+        stacktrace!("vw_drain_encoder", "video_writer", {
+            self.drain_encoder()
+        })
     }
 
     /// Hay que llamarlo al terminar de escribir todos los frames: hace flush

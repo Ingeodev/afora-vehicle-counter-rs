@@ -4,6 +4,7 @@ use crate::core::afora_error::AforaError;
 use crate::features::tracking_suscribers::domain::tracking_subscriber_input::{FrameTrackingProps};
 use crate::features::tracking_suscribers::ports::tracking_subscriber::TrackingSubscriber;
 use crate::features::writter::adapters::video_writter::VideoWriter;
+use crate::stacktrace;
 
 pub struct VideoWriterSubscriber {
     video_writer: VideoWriter,
@@ -37,9 +38,9 @@ impl TrackingSubscriber for VideoWriterSubscriber {
     }
 
     fn on_tracking_frame(&mut self, tracks: Arc<FrameTrackingProps>) -> Result<(), AforaError> {
-        //println!("New frame to export video");
-        
-        self.video_writer.write( &tracks.frame, &tracks.tracks )?;
+        stacktrace!("video_write_frame", "subscriber", {
+            self.video_writer.write( &tracks.frame, &tracks.tracks )
+        })?;
         Ok(())
     }
 

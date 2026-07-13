@@ -68,9 +68,11 @@ impl Pipeline for SequentialPipeline {
 
             for (frame, detections) in batch.into_iter().zip(detections_batch) {
 
-                let tracks = self.tracker.update(TrackingInput {
-                    frame: frame.clone(),
-                    detections,
+                let tracks = stacktrace!("tracking", "pipeline", {
+                    self.tracker.update(TrackingInput {
+                        frame: frame.clone(),
+                        detections,
+                    })
                 })?;
 
                 let time = SystemTime::now()
@@ -88,13 +90,15 @@ impl Pipeline for SequentialPipeline {
                     tracks,
                 });
 
-                self.broadcaster.notify(
-                    Arc::new(
-                        TrackingSubscriberInput::FrameWithTracking(
-                            subscriber_input,
+                stacktrace!("broadcast_frame", "pipeline", {
+                    self.broadcaster.notify(
+                        Arc::new(
+                            TrackingSubscriberInput::FrameWithTracking(
+                                subscriber_input,
+                            ),
                         ),
-                    ),
-                );
+                    )
+                });
             }
         }
 
