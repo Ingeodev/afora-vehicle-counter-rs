@@ -12,6 +12,7 @@ use crate::features::detector::domain::detection::Detection;
 use crate::features::detector::ports::inference_runtime::InferenceRuntime;
 use crate::features::detector::ports::model_pipeline::ModelPipeline;
 use crate::shared::domain::frame::Frame;
+use crate::stacktrace;
 use self::ports::tensor_base::*;
 
 
@@ -57,9 +58,18 @@ impl Detector {
                 "El batch está vacío".into(),
             ));
         }
-        let input = self.pipeline.preprocess(frames.clone(), self.runtime.input_spec())?;
-        let output = self.runtime.run(&input)?;
-        self.pipeline.postprocess(output, frames[0].original_size())
+        
+        let input = stacktrace!("detection_preprocessing", 
+            self.pipeline.preprocess(frames.clone(), self.runtime.input_spec())
+        )?;
+        
+        let output = stacktrace!("detection_inference", 
+            self.runtime.run(&input)
+        )?;
+
+        stacktrace!("detection_postprocessing", 
+            self.pipeline.postprocess(output, frames[0].original_size())
+        )
     }
 
     pub fn runtime_name(&self) -> &'static str {
