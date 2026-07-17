@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 use crate::core::afora_error::AforaError;
-use crate::features::detector::{ ModelChoice, RuntimeChoice};
+use crate::features::detector::domain::preprocess_fallback::PreprocessFallbackPolicy;
+use crate::features::detector::ports::inference_runtime::InferenceRuntimeConfig;
+use crate::features::detector::ports::postprocessor::PostprocessorConfig;
+use crate::features::detector::ports::preprocessor::PreprocessorConfig;
 use crate::features::media_source::media_source_factory::MediaSourceChoice;
 use crate::features::pipeline::domain::pipeline_config::ExecutionMode;
 use crate::features::pipeline::pipeline_builder::PipelineBuilder;
@@ -11,10 +14,21 @@ use crate::shared::utilities::get_video_props::get_video_properties;
 pub mod features;
 pub mod core;
 mod shared;
+mod feature_validation;
 
 fn main() -> Result<(), AforaError> {
 
-    let args = CliArgs::parse()?;
+    //let args = CliArgs::parse()?;
+    
+    let args: CliArgs = CliArgs{
+        source: PathBuf::from("assets/videos/video.mp4"),
+            model_path:  PathBuf::from("assets/models/yolo11s_dyn.onnx"),
+            max_frames: Some(100),
+            video_output_path: PathBuf::from("assets/videos/output1111.mp4"),
+            batch_size: 1,
+            debug: true,
+        debug_tags: None,
+    };
 
     crate::shared::debug::set_debug(args.debug);
     if args.debug {
@@ -34,14 +48,20 @@ fn main() -> Result<(), AforaError> {
             path: args.source.clone(),
             max_frames: args.max_frames,
         })?
-        .set_model(ModelChoice::YoloOnnxOptimized {
-            conf_threshold: 0.25,
-            input_side: 640, //TODO: Add to args
-            batch_size: args.batch_size
-        })
-        .set_runtime(RuntimeChoice::Onnx {
+        .set_runtime(InferenceRuntimeConfig {
             model_path: args.model_path.clone(),
             num_threads: 4,
+        })
+        .set_preprocessor_config(PreprocessorConfig::new(
+            PreprocessFallbackPolicy::Cpu,
+        ))
+        .set_postprocessor_config(PostprocessorConfig {
+            input_side: 640,
+            batch_size: args.batch_size,
+            #[cfg(feature = "yolo11")]
+            conf_threshold: 0.5,
+            #[cfg(feature = "yolo11")]
+            nms_iou_threshold: 0.45,
         })
         .set_tracker_config(TrackerChoice::OcSort {
            max_age: 30,
@@ -141,7 +161,7 @@ impl CliArgs {
         Ok(Self {
             source: source.ok_or_else(|| {
                 AforaError::InvalidArgument(
-                    "missing --image".into()
+                    "missing --source".into()
                 )
             })?.parse().unwrap(),
 

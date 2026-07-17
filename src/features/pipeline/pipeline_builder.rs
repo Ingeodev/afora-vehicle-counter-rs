@@ -1,5 +1,8 @@
 use crate::core::afora_error::AforaError;
-use crate::features::detector::{DetectorFactory, ModelChoice, RuntimeChoice};
+use crate::features::detector::application::detector::Detector;
+use crate::features::detector::ports::inference_runtime::InferenceRuntimeConfig;
+use crate::features::detector::ports::postprocessor::PostprocessorConfig;
+use crate::features::detector::ports::preprocessor::PreprocessorConfig;
 use crate::features::media_source::domain::frame_source::FrameSource;
 use crate::features::media_source::media_source_factory::{MediaSourceChoice, MediaSourceFactory};
 use crate::features::pipeline::domain::pipeline_config::{ExecutionMode, PipelineConfig};
@@ -12,8 +15,9 @@ use crate::features::tracking_suscribers::tracking_subscriber_factory::TrackerSu
 pub struct PipelineBuilder {
     pub execution_mode: Option<ExecutionMode>,
     pub media_source: Option<Box<dyn FrameSource>>,
-    pub runtime: Option<RuntimeChoice>,
-    pub model: Option<ModelChoice>,
+    pub runtime_config: Option<InferenceRuntimeConfig>,
+    pub preprocessor_config: Option<PreprocessorConfig>,
+    pub postprocessor_config: Option<PostprocessorConfig>,
     pub tracker_config: Option<Box<dyn Tracker>>,
     pub subscribers: Vec<TrackerSubscriberChoice>,
 }
@@ -23,8 +27,9 @@ impl PipelineBuilder {
         Self {
             execution_mode: None,
             media_source: None,
-            runtime: None,
-            model: None,
+            runtime_config: None,
+            preprocessor_config: None,
+            postprocessor_config: None,
             tracker_config: None,
             subscribers: vec![],
         }
@@ -41,13 +46,18 @@ impl PipelineBuilder {
         Ok(self)
     }
 
-    pub fn set_runtime (&mut self, runtime_choice: RuntimeChoice) -> &mut Self {
-        self.runtime = Some(runtime_choice);
+    pub fn set_runtime (&mut self, config: InferenceRuntimeConfig) -> &mut Self {
+        self.runtime_config = Some(config);
         self
     }
 
-    pub fn set_model (&mut self, model_choice: ModelChoice) -> &mut Self {
-        self.model = Some(model_choice);
+    pub fn set_preprocessor_config (&mut self, config: PreprocessorConfig) -> &mut Self {
+        self.preprocessor_config = Some(config);
+        self
+    }
+
+    pub fn set_postprocessor_config (&mut self, config: PostprocessorConfig) -> &mut Self {
+        self.postprocessor_config = Some(config);
         self
     }
 
@@ -75,15 +85,21 @@ impl PipelineBuilder {
             )
         })?;
 
-        let runtime = self.runtime.take().ok_or_else(|| {
+        let runtime = self.runtime_config.take().ok_or_else(|| {
             AforaError::ConfigurationError(
                 "Runtime not configured.".into(),
             )
         })?;
 
-        let model = self.model.take().ok_or_else(|| {
+        let preprocessor = self.preprocessor_config.take().ok_or_else(|| {
             AforaError::ConfigurationError(
-                "Model not configured.".into(),
+                "Preprocessor not configured yet.".into(),
+            )
+        })?;
+
+        let postprocessor = self.postprocessor_config.take().ok_or_else(|| {
+            AforaError::ConfigurationError(
+                "Postprocessor not configured yet.".into(),
             )
         })?;
 
@@ -93,7 +109,11 @@ impl PipelineBuilder {
             )
         })?;
 
-        let detector = DetectorFactory::build(runtime, model)?;
+        let detector = Detector::new(
+            preprocessor,
+            runtime,
+            postprocessor,
+        )?;
 
         let config = PipelineConfig {
             execution_mode,

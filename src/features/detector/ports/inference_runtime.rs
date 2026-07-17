@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use crate::core::afora_error::AforaError;
 use crate::features::detector::ports::tensor_base::TensorSpec;
 use crate::features::detector::ports::tensor_input::TensorInput;
@@ -28,5 +29,12 @@ pub trait InferenceRuntime: Send + Sync {
         }
         Ok(())
     }
+}
+
+pub struct InferenceRuntimeConfig {
+    #[cfg(feature = "cuda")]
+    pub model_path: PathBuf,
+    #[cfg(feature = "cuda")]
+    pub num_threads: usize
 }
  

@@ -3,6 +3,17 @@ name = "afora_vc"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["cuda", "yolo11"]
+
+cuda = []
+rk3588 = []
+
+ppyoloe = []
+yolo11 = []
+rtdetr = []
+rfdetr = []
+
 [dependencies]
 ort = { version = "=2.0.0-rc.10", features = ["cuda"] }
 image = "=0.25.10"

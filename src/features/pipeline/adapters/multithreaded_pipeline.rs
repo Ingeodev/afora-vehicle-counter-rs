@@ -5,7 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use flume::{bounded, Receiver, Sender};
 use std::sync::Mutex;
 use crate::core::afora_error::AforaError;
-use crate::features::detector::Detector;
+use crate::features::detector::application::detector::Detector;
+use crate::features::detector::ports::preprocessor::Preprocessor;
 use crate::features::media_source::domain::frame_source::FrameSource;
 use crate::features::pipeline::ports::pipeline::Pipeline;
 use crate::features::pipeline::ports::subscriber_broadcast::SubscriberBroadcast;
@@ -109,7 +110,7 @@ impl Pipeline for MultithreadedPipeline {
 
         loop {
 
-            let batch_size = self.detector.pipeline.expected_input_shape().0 as usize;
+            let batch_size = self.detector.preprocessor.batch_size() as usize;
 
             let mut batch = Vec::with_capacity(batch_size);
 
