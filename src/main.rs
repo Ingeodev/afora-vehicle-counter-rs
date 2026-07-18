@@ -23,7 +23,7 @@ fn main() -> Result<(), AforaError> {
     let args: CliArgs = CliArgs{
         source: PathBuf::from("assets/videos/video.mp4"),
             model_path:  PathBuf::from("assets/models/yolo11s_dyn.onnx"),
-            max_frames: Some(100),
+            max_frames: Some(12),
             video_output_path: PathBuf::from("assets/videos/output1111.mp4"),
             batch_size: 1,
             debug: true,
