@@ -38,6 +38,7 @@ dependencies = [
  "ort",
  "rayon",
  "rga",
+ "rknpu2",
  "trackforge",
 ]
 
@@ -1626,6 +1627,23 @@ name = "rgb"
 version = "0.8.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
+
+[[package]]
+name = "rknpu2"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afa73906630c214750389bb76ef82cc459877ff9ac34c8c9104249586cd75480"
+dependencies = [
+ "bitflags",
+ "half",
+ "rknpu2-sys",
+]
+
+[[package]]
+name = "rknpu2-sys"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e8a8c93e394d945985e199cd377c1adc3e4e3447d64fda592a0e9c6d2c27498"
 
 [[package]]
 name = "rustc-hash"

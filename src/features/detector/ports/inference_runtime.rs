@@ -32,7 +32,6 @@ pub trait InferenceRuntime: Send + Sync {
 }
 
 pub struct InferenceRuntimeConfig {
-    #[cfg(feature = "cuda")]
     pub model_path: PathBuf,
     #[cfg(feature = "cuda")]
     pub num_threads: usize

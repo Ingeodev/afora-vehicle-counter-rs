@@ -50,7 +50,7 @@ fn main() -> Result<(), AforaError> {
         })?
         .set_runtime(InferenceRuntimeConfig {
             model_path: args.model_path.clone(),
-            num_threads: 4,
+            //num_threads: 4,
         })
         .set_preprocessor_config(PreprocessorConfig::new(
             PreprocessFallbackPolicy::Cpu,

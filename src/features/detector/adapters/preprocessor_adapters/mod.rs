@@ -1,5 +1,6 @@
 pub(crate) mod cpu;
 
+#[cfg(feature = "cuda")]
 mod cuda_preprocessor;
 
 #[cfg(feature = "rk3588")]

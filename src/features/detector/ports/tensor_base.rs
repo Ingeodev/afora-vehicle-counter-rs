@@ -11,6 +11,12 @@ pub enum TensorLayout {
     Nhwc,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct QuantParams {
+    pub scale: f32,
+    pub zero_point: i32,
+}
+
 /// Describe forma y tipo de dato que un runtime espera o produce.
 /// El pipeline consulta esto para producir bytes en el formato exacto
 /// que el runtime necesita, sin que el pipeline conozca de antemano
@@ -20,11 +26,18 @@ pub struct TensorSpec {
     pub shape: Vec<i64>, // ej. [1, 3, 640, 640]; -1 para dimensiones dinámicas
     pub dtype: TensorDType,
     pub layout: TensorLayout,
+    pub quant: Option<QuantParams>,
 }
 
 impl TensorSpec {
+
     pub fn new(shape: Vec<i64>, dtype: TensorDType, layout: TensorLayout) -> Self {
-        Self { shape: shape.to_vec(), dtype, layout }
+        Self { shape: shape.to_vec(), dtype, layout, quant: None }
+    }
+
+    pub fn with_quant( mut self,   scale: f32, zero_point: i32,) -> Self {
+        self.quant = Some(QuantParams{scale, zero_point});
+        self
     }
 
     /// Verifica si un shape lógico (C, H, W) es compatible con este spec,
