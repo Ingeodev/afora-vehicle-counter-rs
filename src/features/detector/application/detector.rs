@@ -46,10 +46,11 @@ impl Detector {
         }
         
         let mut  preprocess_tensor_spec = runtime_spec.clone();
-        
+
+        //TODO: Ajustar las opciones porque cambian con el tipo de layout
         preprocess_tensor_spec.shape[0] = postprocessor_config.batch_size as i64;
         preprocess_tensor_spec.shape[2] = postprocessor_config.input_side as i64;
-        preprocess_tensor_spec.shape[3] = postprocessor_config.input_side as i64;
+        preprocess_tensor_spec.shape[1] = postprocessor_config.input_side as i64;
 
         let preprocessor = PreprocessorImpl::create(PreprocessorConfig {
             target_spec: Arc::new(preprocess_tensor_spec),

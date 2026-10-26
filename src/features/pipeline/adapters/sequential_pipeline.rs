@@ -47,8 +47,10 @@ impl Pipeline for SequentialPipeline {
             let mut batch = Vec::with_capacity(batch_size);
 
             while batch.len() < batch_size {
+                
+                let next_frame = stacktrace!("get_frame", "pipeline", self.media_source.next());
 
-                match self.media_source.next() {
+                match next_frame {
 
                     Some(frame) => {
                         batch.push(Arc::new(frame?));
@@ -63,7 +65,7 @@ impl Pipeline for SequentialPipeline {
                 break;
             }
 
-            let detections_batch = stacktrace!("detection", "inference", 
+            let detections_batch = stacktrace!("detection", "pipeline", 
                 self.detector.detect(batch.clone())
             )?;
 

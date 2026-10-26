@@ -21,6 +21,7 @@ use crate::features::detector::ports::inference_runtime::{InferenceRuntime, Infe
 use crate::features::detector::ports::tensor_base::{QuantParams, TensorDType, TensorLayout, TensorSpec};
 use crate::features::detector::ports::tensor_input::TensorInput;
 use crate::features::detector::ports::tensor_output::TensorOutput;
+use crate::stacktrace;
 
 pub struct RknnRuntime {
     //Se selecciona el tipo LinkedAPI porque librknnrt.so se resuelve en tiempo de compilacion.
@@ -71,7 +72,7 @@ impl RknnRuntime {
             let input_spec = {
                 let shape = input_attr.dims().iter().map(|&d| d as i64).collect();
                 let dtype = if input_is_quantized { TensorDType::I8 } else { TensorDType::F32 };
-                let spec = TensorSpec::new(shape, dtype, TensorLayout::Nchw);
+                let spec = TensorSpec::new(shape, dtype, TensorLayout::Nhwc);
                 if input_is_quantized {
                     spec.with_quant(input_attr.scale(), input_attr.zero_point())
                 } else {
@@ -103,27 +104,39 @@ impl InferenceRuntime for RknnRuntime {
             "el preprocessor RKNN debe entregar bytes ya en el dtype/quant declarado por self.input_spec"
         );
 
+        // Fase 1: prep en CPU (conversión de dtype + construcción del Input) — no debería
+        // ser representativa, si aparece pesada aquí es una señal de conversión de datos costosa
+        // Solo se allocatea si el dtype es F32; para I8 esto queda en None sin costo extra
+        let f32_buf: Option<Vec<f32>> = match self.input_spec.dtype {
+            TensorDType::F32 => Some(bytes_to_f32(&input.data)),
+            _ => None,
+        };
+
+        let rknn_input = stacktrace!("input_prep", "runtime_inference", {
         let buf_view = match self.input_spec.dtype {
             TensorDType::I8 => BufView::I8(as_i8_slice(&input.data)),
-            TensorDType::F32 => BufView::F32(&bytes_to_f32(&input.data)),
+            TensorDType::F32 => BufView::F32(f32_buf.as_ref().unwrap()),
             TensorDType::U8 => unreachable!(
                 "RknnRuntime::load nunca produce input_spec con dtype U8"
             ),
         };
-
-        let rknn_input = Input::new(
+        Input::new(
             0,
             buf_view,
             true, // pass_through: el preprocessor ya entregó exactamente lo que el modelo espera
-            TensorFormatKind::NCHW(TensorFormat::NCHW),
-        );
+            TensorFormatKind::NHWC(TensorFormat::NHWC),
+        )
+    });
 
-        self.model
-            .set_inputs(rknn_input)
-            .map_err(|e| AforaError::InferenceError(e.to_string()))?;
-        self.model
-            .run()
-            .map_err(|e| AforaError::InferenceError(e.to_string()))?;
+        // Fase 2: transferencia host -> NPU (copia/DMA hacia buffers del modelo)
+        stacktrace!("rknn_set_input", "runtime_inference", self.model
+    .set_inputs(rknn_input)
+    .map_err(|e| AforaError::InferenceError(e.to_string())))?;
+
+        // Fase 3: ejecución real en el NPU — la sospechosa principal dado el delta que mediste
+        stacktrace!("rknn_run", "runtime_inference", self.model
+    .run()
+    .map_err(|e| AforaError::InferenceError(e.to_string())))?;
 
         let mut logits = vec![0.0f32; self.output_len];
         let output = Output {
@@ -133,9 +146,12 @@ impl InferenceRuntime for RknnRuntime {
                 want_float: true, // el runtime dequantiza usando el scale/zp internos del output
             },
         };
-        self.model
-            .get_outputs(&mut vec![output])
-            .map_err(|e| AforaError::InferenceError(e.to_string()))?;
+
+        // Fase 4: transferencia NPU -> host + dequantización (want_float=true dispara el escalado
+        // scale/zp; si esta fase pesa, la dequantización en el driver puede ser el segundo sospechoso)
+        stacktrace!("rknn_get_outputs", "runtime_inference", self.model
+    .get_outputs(&mut vec![output])
+    .map_err(|e| AforaError::InferenceError(e.to_string())))?;
 
         Ok(TensorOutput::new(vec![(
             "output0".to_string(),

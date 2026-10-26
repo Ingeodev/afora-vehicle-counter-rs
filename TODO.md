@@ -1,6 +1,8 @@
 [*]. Ajustar el tensor_spec que espera preprocessing y el que tiene internameinte runtime.
-[ ] Crear la libreria de ffi para rga en los crates rga y sysrga
-[ ] Crear las estrategias de preprocessing para CUDA, RKNN y CPU (Reutilizar logica existente de cpu ajustada)
+[*]. Crear rknn runtime.
+[*] Crear la libreria de ffi para rga en los crates rga y sysrga
+[*] Crear las estrategias de preprocessing para CUDA, RKNN y CPU (Reutilizar logica existente de cpu ajustada)
+[*] Revisar la inferencia en rknn porque no detecta nada y tarda mas de lo esperado usar otro modelo diferente a yolo11s
 [ ] Analizar la forma de evitar dependencias a librerias externas para eliminar problemas de compatibilidades.
 [ ] Realizar prueba con compilacion a CUDA, probar con fallback en CPU para local y en Google Colab.
 [ ] Volver a correr los benchmarks y analizar los tiempos.

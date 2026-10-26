@@ -22,12 +22,12 @@ fn main() -> Result<(), AforaError> {
     
     let args: CliArgs = CliArgs{
         source: PathBuf::from("assets/videos/video.mp4"),
-            model_path:  PathBuf::from("assets/models/yolo11s_dyn.onnx"),
-            max_frames: Some(12),
-            video_output_path: PathBuf::from("assets/videos/output1111.mp4"),
+            model_path:  PathBuf::from("assets/models/yolov8n-rk3588.rknn"),
+            max_frames: Some(100),
+            video_output_path: PathBuf::from("assets/videos/output112.mp4"),
             batch_size: 1,
             debug: true,
-        debug_tags: None,
+        debug_tags: Some("pipeline".to_string()),
     };
 
     crate::shared::debug::set_debug(args.debug);
@@ -53,7 +53,7 @@ fn main() -> Result<(), AforaError> {
             //num_threads: 4,
         })
         .set_preprocessor_config(PreprocessorConfig::new(
-            PreprocessFallbackPolicy::Cpu,
+            PreprocessFallbackPolicy::Error("Error en preprocesamiento".to_string()),
         ))
         .set_postprocessor_config(PostprocessorConfig {
             input_side: 640,
